@@ -864,7 +864,7 @@ class CohortWarGame extends Forge2DGame {
 
   /// While cohort is stationary, chase uses velocity steering so |v| → [cohortMaxSpeed] (same as full-stick leader cap).
   void _applyChaseVelocityToward(Body b, Vector2 targetWorldPos) {
-    final Vector2 to = targetWorldPos - b.worldCenter;
+    final Vector2 to = targetWorldPos - b.position;
     if (to.length2 < 1e-10) return;
     final Vector2 dir = to.normalized();
     final Vector2 vWant = dir * cohortMaxSpeed;
@@ -1024,7 +1024,7 @@ class CohortWarGame extends Forge2DGame {
       }
       final Body b = playerSoldierBodies[i].body;
       final Vector2 target = lc + playerCohort.formationTargetLocal(i);
-      final Vector2 err = target - b.worldCenter;
+      final Vector2 err = target - b.position;
       final Vector2 relVel = b.linearVelocity - vLeader;
       final Vector2 accel = err * soldierFormationGain - relVel * c;
       b.applyForce(accel * b.mass);
