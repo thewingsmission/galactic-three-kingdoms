@@ -98,6 +98,18 @@ class SoldierShapePart {
   final SoldierPartStackRole stackRole;
 }
 
+/// Visual effect rendered on the crown triangle during the attack probe window.
+enum CrownVfxMode {
+  /// No crown VFX.
+  none,
+  /// Fiery flame particles at the crown centroid.
+  flames,
+  /// Concentric shockwave rings + debris fragments (physical bombardment).
+  bombardment,
+  /// Crown triangle scales up to 3x as it extends from rest position.
+  scalingCrown,
+}
+
 /// Unit design. [rarity] optional: if set, defines tier; else inferred from part count (legacy curve).
 class SoldierDesign {
   SoldierDesign({
@@ -106,14 +118,12 @@ class SoldierDesign {
     required this.parts,
     required this.attack,
     SoldierRarity? rarity,
-    /// Range column only: model point for hub dot / ruler (0,0) / detection disk center.
-    /// Soldier rendering still uses the normal stable bbox anchor — set so dot can move without
-    /// shifting the figure.
     this.rangePlotHubModel,
-    /// When true, [MultiPolygonSoldierPainter] draws flame particles on the crown triangle
-    /// during the attack probe window ([attackProbeEnvelope] > 0).
-    this.paintCrownFlames = false,
+    bool paintCrownFlames = false,
+    CrownVfxMode? crownVfxMode,
   })  : _rarityOverride = rarity,
+        crownVfxMode = crownVfxMode ??
+            (paintCrownFlames ? CrownVfxMode.flames : CrownVfxMode.none),
         assert(parts.isNotEmpty),
         assert(parts.length >= 2);
 
@@ -122,7 +132,9 @@ class SoldierDesign {
   final List<SoldierShapePart> parts;
   final SoldierAttackSpec attack;
   final Offset? rangePlotHubModel;
-  final bool paintCrownFlames;
+  final CrownVfxMode crownVfxMode;
+
+  bool get paintCrownFlames => crownVfxMode != CrownVfxMode.none;
 
   final SoldierRarity? _rarityOverride;
 

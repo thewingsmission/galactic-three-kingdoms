@@ -20,25 +20,27 @@ class InventoryScreen extends StatefulWidget {
 }
 
 class _InventoryScreenState extends State<InventoryScreen> {
-  static const int _inventorySize = 11;
+  static const int _inventorySize = 10;
   static const int _maxCohortSize = 10;
 
   /// Matches compact [SoldierInventoryTile] preview for cohort stack hit area.
-  static const double _kFormationSoldierPx = 40;
+  static const double _kFormationSoldierPx = 60;
   static const double _kFormationSoldierHalf = _kFormationSoldierPx / 2;
 
   /// Drag within this distance of the crosshair snaps to exact center (0, 0).
-  static const double _centerSnapPx = 14;
+  static const double _centerSnapPx = 21;
 
   /// Ring radius for the 9 default placement slots around the center soldier.
-  static const double _placementRadius = 46.8;
+  static const double _placementRadius = 70.2;
 
   /// 360° / 9 = 40° per slot for soldiers 2–10.
   static const int _ringSlots = 9;
 
-  /// Default war roster: production **Gilded Bastion**.
-  static final SoldierDesign _kDefaultRosterUnit =
-      kProductionSoldierDesignCatalog.first;
+  /// Per-slot roster: 5 × Gilded Bastion (#1) + 5 × Gilded Bastion 3 (#3).
+  static final List<SoldierDesign> _kRoster = List<SoldierDesign>.unmodifiable(<SoldierDesign>[
+    for (int i = 0; i < 5; i++) kProductionSoldierDesignCatalog[0],
+    for (int i = 0; i < 5; i++) kProductionSoldierDesignCatalog[2],
+  ]);
 
   SoldierDesignPalette _palette = SoldierDesignPalette.red;
 
@@ -49,7 +51,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   void initState() {
     super.initState();
-    _soldierContact = SoldierContact.fromDesign(_kDefaultRosterUnit, 56);
+    _soldierContact = SoldierContact.fromDesign(_kRoster.first, 56);
   }
 
   /// Lowest inventory index among selected soldiers (cohort order); that unit stays on the crosshair.
@@ -201,7 +203,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             inventoryIndex: i,
             type: SoldierType.triangle,
             localOffset: _offsets[i] ?? Offset.zero,
-            soldierDesign: _kDefaultRosterUnit,
+            soldierDesign: _kRoster[i],
             cohortPalette: _palette,
           ),
         );
@@ -308,7 +310,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               index: i,
                               selected: _selected[i],
                               onTap: () => _toggleSlot(i),
-                              rosterDesign: _kDefaultRosterUnit,
+                              rosterDesign: _kRoster[i],
                               rosterPalette: _palette,
                             );
                           },
@@ -455,7 +457,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             child: CustomPaint(
               size: const Size(_kFormationSoldierPx, _kFormationSoldierPx),
               painter: RosterMiniSoldierPainter(
-                design: _kDefaultRosterUnit,
+                design: _kRoster[i],
                 palette: _palette,
               ),
             ),

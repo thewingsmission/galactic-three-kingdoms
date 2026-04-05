@@ -294,8 +294,8 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
                                           motionT: _attackCtrl.value,
                                           uniformWorldScale: sigma,
                                           fixedModelAnchor: idleAnchor,
-                                          paintCrownFlames:
-                                              widget.design.paintCrownFlames,
+                                          crownVfxMode:
+                                              widget.design.crownVfxMode,
                                         ),
                                       );
                                     },
@@ -308,8 +308,8 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
                                       motionT: 0,
                                       uniformWorldScale: sigma,
                                       fixedModelAnchor: idleAnchor,
-                                      paintCrownFlames:
-                                          widget.design.paintCrownFlames,
+                                      crownVfxMode:
+                                          widget.design.crownVfxMode,
                                     ),
                                   ),
                           );
@@ -369,11 +369,15 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
                           final double plotH =
                               math.max(0, c.maxHeight - rulerL);
                           final Size plotSz = Size(plotW, plotH);
-                          final double sigma =
+                          double sigma =
                               soldierIdleUniformWorldToPixel(
                             plotSz,
                             kSoldierDesignCatalog,
                           );
+                          if (widget.design.crownVfxMode ==
+                              CrownVfxMode.scalingCrown) {
+                            sigma *= 0.9;
+                          }
                           final Offset rangeStableAnchor =
                               _rangeStableModelAnchor;
                           final Offset rangePlotCenter =
@@ -398,8 +402,8 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
                                     attackCycleT: attackT,
                                     uniformWorldScale: sigma,
                                     fixedModelAnchor: rangeStableAnchor,
-                                    paintCrownFlames:
-                                        widget.design.paintCrownFlames,
+                                    crownVfxMode:
+                                        widget.design.crownVfxMode,
                                   ),
                                 ),
                                 CustomPaint(
@@ -413,6 +417,8 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
                                         rangeStableAnchor,
                                     detailRangePlotHubModel:
                                         widget.design.rangePlotHubModel,
+                                    crownVfxMode:
+                                        widget.design.crownVfxMode,
                                   ),
                                 ),
                               ],

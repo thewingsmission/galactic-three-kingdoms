@@ -20,11 +20,13 @@ class SoldierRangeRingsPainter extends CustomPainter {
     this.detailUniformSigma,
     this.detailStableModelAnchor,
     this.detailRangePlotHubModel,
+    this.crownVfxMode = CrownVfxMode.none,
   });
 
   /// World-space contact radius (e.g. from [SoldierContact.fromModel]).
   final double contactRadius;
   final double attackScale;
+  final CrownVfxMode crownVfxMode;
   /// When set with [detailMotionT], [detailAttackCycleT], [detailUniformSigma], draws
   /// soldier-aligned contact + dynamic crown attack disc.
   final List<SoldierShapePart>? detailParts;
@@ -320,7 +322,10 @@ class SoldierRangeRingsPainter extends CustomPainter {
 
     if (crownCentroid != null && attackEnv > _kAttackDiskMinEnvelope) {
       final Offset ac = toScreen(crownCentroid);
-      final double ar = crownCircumR * sigma;
+      double ar = crownCircumR * sigma;
+      if (crownVfxMode == CrownVfxMode.scalingCrown) {
+        ar *= (1.0 + 2.0 * attackEnv) * 0.55;
+      }
       final double atkStroke = math.max(2.0, math.min(5.0, ar * 0.18));
       canvas.drawCircle(
         ac,
@@ -428,6 +433,7 @@ class SoldierRangeRingsPainter extends CustomPainter {
   bool shouldRepaint(covariant SoldierRangeRingsPainter oldDelegate) {
     if (oldDelegate.contactRadius != contactRadius ||
         oldDelegate.attackScale != attackScale ||
+        oldDelegate.crownVfxMode != crownVfxMode ||
         oldDelegate.detailParts != detailParts ||
         oldDelegate.detailMotionT != detailMotionT ||
         oldDelegate.detailAttackCycleT != detailAttackCycleT ||

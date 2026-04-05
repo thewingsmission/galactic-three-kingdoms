@@ -24,7 +24,7 @@ class MultiPolygonSoldierPainter extends CustomPainter {
     this.attackCycleT,
     this.uniformWorldScale,
     this.fixedModelAnchor,
-    this.paintCrownFlames = false,
+    this.crownVfxMode = CrownVfxMode.none,
   }) : assert(parts.isNotEmpty);
 
   /// Global multiplier on all outline / polyline stroke pixels (half thickness vs legacy).
@@ -48,8 +48,10 @@ class MultiPolygonSoldierPainter extends CustomPainter {
   /// When set, maps this model-space point to the canvas center instead of the current frame’s
   /// bbox center (stable position during attack / flap animation).
   final Offset? fixedModelAnchor;
-  /// Flame particles on the probe crown while [attackProbeEnvelope] > 0 ([SoldierDesign.paintCrownFlames]).
-  final bool paintCrownFlames;
+  /// Crown VFX mode: [CrownVfxMode.flames], [CrownVfxMode.bombardment], [CrownVfxMode.scalingCrown], or [CrownVfxMode.none].
+  final CrownVfxMode crownVfxMode;
+
+  bool get paintCrownFlames => crownVfxMode != CrownVfxMode.none;
 
   /// Fully retracted tail of each cycle must last at least this many seconds (matches
   /// [SoldierAttackSpec.kPreviewCycleSeconds]).
@@ -446,6 +448,138 @@ class MultiPolygonSoldierPainter extends CustomPainter {
     }
   }
 
+  /// Jagged starburst polygon vertices centered on [center] with [spikeCount] spikes.
+  /// [outerR] = spike tip radius, [innerR] = valley radius.
+  /// [wobble] adds per-spike randomness to spike length (0 = regular, 0.3 = moderate).
+  static List<Offset> _starburstVerts(
+    Offset center,
+    int spikeCount,
+    double outerR,
+    double innerR,
+    double rotation, {
+    double wobble = 0,
+    int seed = 0,
+  }) {
+    final int n = spikeCount * 2;
+    final double step = 2 * math.pi / n;
+    final List<Offset> pts = <Offset>[];
+    for (int i = 0; i < n; i++) {
+      final double a = rotation + i * step;
+      final bool isTip = i.isEven;
+      double r = isTip ? outerR : innerR;
+      if (wobble > 0 && isTip) {
+        r *= 1.0 + wobble * math.sin(seed + i * 2.73);
+      }
+      pts.add(Offset(center.dx + math.cos(a) * r, center.dy + math.sin(a) * r));
+    }
+    return pts;
+  }
+
+  static Path _pathFromOffsets(List<Offset> pts) {
+    final Path p = Path();
+    for (int i = 0; i < pts.length; i++) {
+      if (i == 0) {
+        p.moveTo(pts[i].dx, pts[i].dy);
+      } else {
+        p.lineTo(pts[i].dx, pts[i].dy);
+      }
+    }
+    p.close();
+    return p;
+  }
+
+  static void _paintBombardmentParticles(
+    Canvas canvas,
+    List<Offset> triScreen,
+    double envelope,
+    double attackT,
+    double motionT,
+    double pixelScale,
+    SoldierDesignPalette palette, {
+    double sizeMul = 1.0,
+  }) {
+    if (triScreen.length != 3) return;
+    final Offset center = Offset(
+      (triScreen[0].dx + triScreen[1].dx + triScreen[2].dx) / 3.0,
+      (triScreen[0].dy + triScreen[1].dy + triScreen[2].dy) / 3.0,
+    );
+    double maxSpan = 0;
+    for (final Offset p in triScreen) {
+      final double d = (p - center).distance;
+      if (d > maxSpan) maxSpan = d;
+    }
+    final double e = envelope.clamp(0.0, 1.0);
+    if (e < 0.01) return;
+
+    final ({Color bright, Color mid, Color deep}) fc = palette.crownFlameColors;
+    final double baseR = math.max(maxSpan, pixelScale * 5) * (1.4 + 0.8 * e) * sizeMul;
+    final double rot = math.sin(attackT * math.pi * 6) * 0.12;
+    final double outlinePx = (pixelScale * 1.1).clamp(0.5, 3.0);
+    const Color strokeCol = Color(0xFF000000);
+
+    // -- Outer starburst (deep/dark color + black stroke) --
+    final List<Offset> outerPts = _starburstVerts(
+      center, 9, baseR * e, baseR * 0.52 * e, rot - 0.15,
+      wobble: 0.22, seed: 7,
+    );
+    final Path outerPath = _pathFromOffsets(outerPts);
+    canvas.drawPath(outerPath, Paint()..color = fc.deep.withValues(alpha: e)..style = PaintingStyle.fill);
+    canvas.drawPath(outerPath, Paint()
+      ..color = strokeCol.withValues(alpha: e * 0.85)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = outlinePx * 1.3
+      ..strokeJoin = StrokeJoin.round);
+
+    // -- Middle starburst (mid/orange color) --
+    final double midR = baseR * 0.68;
+    final List<Offset> midPts = _starburstVerts(
+      center, 8, midR * e, midR * 0.48 * e, rot + 0.2,
+      wobble: 0.18, seed: 13,
+    );
+    final Path midPath = _pathFromOffsets(midPts);
+    canvas.drawPath(midPath, Paint()..color = fc.mid.withValues(alpha: e)..style = PaintingStyle.fill);
+    canvas.drawPath(midPath, Paint()
+      ..color = strokeCol.withValues(alpha: e * 0.7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = outlinePx
+      ..strokeJoin = StrokeJoin.round);
+
+    // -- Inner bright core (bright/yellow) --
+    final double coreR = baseR * 0.36;
+    final List<Offset> corePts = _starburstVerts(
+      center, 7, coreR * e, coreR * 0.45 * e, rot - 0.35,
+      wobble: 0.12, seed: 19,
+    );
+    final Path corePath = _pathFromOffsets(corePts);
+    canvas.drawPath(corePath, Paint()..color = fc.bright.withValues(alpha: e)..style = PaintingStyle.fill);
+
+    // -- Speed line spikes (4 elongated triangles shooting outward) --
+    const int spikeLineCount = 4;
+    const List<double> spikeAngles = <double>[-0.7, 0.65, 2.4, -2.5];
+    for (int k = 0; k < spikeLineCount; k++) {
+      final double a = spikeAngles[k] + rot * 0.5;
+      final double len = baseR * (1.1 + (k.isEven ? 0.3 : 0.0)) * e;
+      final double startR = baseR * 0.6 * e;
+      final double halfW = pixelScale * (1.2 + 0.4 * (k % 2));
+      final double ca = math.cos(a), sa = math.sin(a);
+      final double perpX = -sa * halfW, perpY = ca * halfW;
+      final Offset tip = Offset(center.dx + ca * len, center.dy + sa * len);
+      final Offset baseL = Offset(center.dx + ca * startR + perpX, center.dy + sa * startR + perpY);
+      final Offset baseR2 = Offset(center.dx + ca * startR - perpX, center.dy + sa * startR - perpY);
+      final Path spike = Path()
+        ..moveTo(tip.dx, tip.dy)
+        ..lineTo(baseL.dx, baseL.dy)
+        ..lineTo(baseR2.dx, baseR2.dy)
+        ..close();
+      canvas.drawPath(spike, Paint()..color = fc.bright.withValues(alpha: e * 0.9)..style = PaintingStyle.fill);
+      canvas.drawPath(spike, Paint()
+        ..color = strokeCol.withValues(alpha: e * 0.6)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = outlinePx * 0.8
+        ..strokeJoin = StrokeJoin.round);
+    }
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (parts.isEmpty) return;
@@ -567,7 +701,7 @@ class MultiPolygonSoldierPainter extends CustomPainter {
       paintPartsForRole(role);
     }
 
-    if (paintCrownFlames && attackCycleT != null) {
+    if (crownVfxMode != CrownVfxMode.none && attackCycleT != null) {
       final double env = attackProbeEnvelope(attackCycleT!);
       if (env > _kCrownFlameMinEnvelope) {
         for (int i = 0; i < parts.length; i++) {
@@ -576,17 +710,70 @@ class MultiPolygonSoldierPainter extends CustomPainter {
           if (p.motion != SoldierPartMotion.attackProbeExtend) continue;
           final List<Offset>? fv = fillX[i];
           if (fv == null || fv.length != 3) continue;
+
+          if (crownVfxMode == CrownVfxMode.scalingCrown) {
+            // Scale crown triangle: 1x at rest → 3x at full extension.
+            final double s = 1.0 + 2.0 * env;
+            final Offset mc = Offset(
+              (fv[0].dx + fv[1].dx + fv[2].dx) / 3.0,
+              (fv[0].dy + fv[1].dy + fv[2].dy) / 3.0,
+            );
+            final List<Offset> scaled = fv
+                .map((Offset v) => Offset(
+                      mc.dx + (v.dx - mc.dx) * s,
+                      mc.dy + (v.dy - mc.dy) * s,
+                    ))
+                .toList();
+            final Path crownPath = Path();
+            for (int j = 0; j < scaled.length; j++) {
+              final Offset q = map(scaled[j]);
+              if (j == 0) {
+                crownPath.moveTo(q.dx, q.dy);
+              } else {
+                crownPath.lineTo(q.dx, q.dy);
+              }
+            }
+            crownPath.close();
+            final SoldierPartColorPair pair =
+                p.colorsForPalette(displayPalette);
+            canvas.drawPath(
+              crownPath,
+              Paint()
+                ..color = pair.fill.withValues(alpha: pair.fill.a * (0.5 + 0.5 * env))
+                ..style = PaintingStyle.fill,
+            );
+            canvas.drawPath(
+              crownPath,
+              Paint()
+                ..color = pair.stroke
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = outlinePx
+                ..strokeJoin = StrokeJoin.round,
+            );
+          }
+
           final List<Offset> triScreen =
               fv.map((Offset m) => map(m)).toList(growable: false);
-          _paintCrownFlameParticles(
-            canvas,
-            triScreen,
-            env,
-            attackCycleT!,
-            motionT,
-            scale,
-            displayPalette,
-          );
+          switch (crownVfxMode) {
+            case CrownVfxMode.flames:
+              _paintCrownFlameParticles(
+                canvas, triScreen, env, attackCycleT!, motionT,
+                scale, displayPalette,
+              );
+            case CrownVfxMode.bombardment:
+              _paintBombardmentParticles(
+                canvas, triScreen, env, attackCycleT!, motionT,
+                scale, displayPalette,
+              );
+            case CrownVfxMode.scalingCrown:
+              _paintBombardmentParticles(
+                canvas, triScreen, env, attackCycleT!, motionT,
+                scale, displayPalette,
+                sizeMul: 1.8,
+              );
+            case CrownVfxMode.none:
+              break;
+          }
           break;
         }
       }
@@ -604,7 +791,7 @@ class MultiPolygonSoldierPainter extends CustomPainter {
         oldDelegate.strokeWidth != strokeWidth ||
         oldDelegate.uniformWorldScale != uniformWorldScale ||
         oldDelegate.fixedModelAnchor != fixedModelAnchor ||
-        oldDelegate.paintCrownFlames != paintCrownFlames) {
+        oldDelegate.crownVfxMode != crownVfxMode) {
       return true;
     }
     for (int i = 0; i < parts.length; i++) {

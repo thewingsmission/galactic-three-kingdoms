@@ -58,6 +58,8 @@ SoldierContactBody _bodyFromContact(SoldierContact c, Vector2 position) {
 
 /// Returns the hit zone as (center, radius) in **world** coordinates.
 /// [attackCycleT] drives the crown position along the probe animation.
+/// For [CrownVfxMode.scalingCrown] designs the radius scales with the
+/// probe envelope (1x at rest → 3x at full extension).
 ({Vector2 center, double radius}) attackZoneWorldCircle(
   CohortSoldier s,
   Vector2 bodyPos,
@@ -99,7 +101,13 @@ SoldierContactBody _bodyFromContact(SoldierContact c, Vector2 position) {
         final double dd = (v - cen).distance;
         if (dd > best) best = dd;
       }
-      final double crownR = best * crownRadiusMul * fit;
+      double crownR = best * crownRadiusMul * fit;
+      if (d.crownVfxMode == CrownVfxMode.scalingCrown) {
+        final double envScale = attackCycleT != null
+            ? 1.0 + 2.0 * MultiPolygonSoldierPainter.attackProbeEnvelope(attackCycleT)
+            : 1.0;
+        crownR *= envScale * 0.55;
+      }
       final double mx = (cen.dx - anchor.dx) * fit;
       final double my = (cen.dy - anchor.dy) * fit;
       final double c = math.cos(angle);
@@ -292,7 +300,7 @@ class CohortWarGame extends Forge2DGame {
            .toList(),
        super(
          gravity: Vector2.zero(),
-         zoom: 1,
+         zoom: 1.5,
        );
 
   final CohortDeployment _deployment;
@@ -1479,7 +1487,13 @@ class _WarAttackZoneLayer extends Component {
           final double dd = (v - cen).distance;
           if (dd > best) best = dd;
         }
-        final double crownR = best * _crownRadiusMul * fit;
+        double crownR = best * _crownRadiusMul * fit;
+        if (d.crownVfxMode == CrownVfxMode.scalingCrown) {
+          final double envScale = aCycleT != null
+              ? 1.0 + 2.0 * MultiPolygonSoldierPainter.attackProbeEnvelope(aCycleT)
+              : 1.0;
+          crownR *= envScale * 0.55;
+        }
 
         final double mx = (cen.dx - anchor.dx) * fit;
         final double my = (cen.dy - anchor.dy) * fit;
@@ -1605,7 +1619,7 @@ class PlayerFormationPainter extends Component {
           attackCycleT: aCycleT,
           uniformWorldScale: fit,
           fixedModelAnchor: anchor,
-          paintCrownFlames: m.design!.paintCrownFlames,
+          crownVfxMode: m.design!.crownVfxMode,
         ).paint(canvas, sz);
       } else {
         TriangleSoldierPainter(side: m.side).paint(canvas, sz);
@@ -1671,7 +1685,7 @@ class EnemySoldiersPainter extends Component {
           attackCycleT: aCycleT,
           uniformWorldScale: fit,
           fixedModelAnchor: anchor,
-          paintCrownFlames: m.design!.paintCrownFlames,
+          crownVfxMode: m.design!.crownVfxMode,
         ).paint(canvas, sz);
       } else {
         OrangeTrianglePainter(side: m.side).paint(

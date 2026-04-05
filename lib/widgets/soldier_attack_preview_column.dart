@@ -112,7 +112,7 @@ class SoldierAttackPreviewColumn extends StatelessWidget {
                           attackCycleT: motionT,
                           uniformWorldScale: lockedWorldToPixel,
                           fixedModelAnchor: stableAnchor,
-                          paintCrownFlames: design.paintCrownFlames,
+                          crownVfxMode: design.crownVfxMode,
                         ),
                       );
                     },

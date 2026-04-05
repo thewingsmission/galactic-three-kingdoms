@@ -184,7 +184,7 @@ class RosterMiniSoldierPainter extends CustomPainter {
       attackCycleT: null,
       uniformWorldScale: fit,
       fixedModelAnchor: anchor,
-      paintCrownFlames: false,
+      crownVfxMode: CrownVfxMode.none,
     ).paint(canvas, size);
   }
 
