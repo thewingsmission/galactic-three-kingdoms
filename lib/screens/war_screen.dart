@@ -16,14 +16,17 @@ class WarScreen extends StatefulWidget {
 
 class _WarScreenState extends State<WarScreen> {
   late final ValueNotifier<Vector2> _velocityHud = ValueNotifier<Vector2>(Vector2.zero());
+  late final ValueNotifier<Vector2> _soldier1PosHud = ValueNotifier<Vector2>(Vector2.zero());
   late final CohortWarGame _game = CohortWarGame(
     deployment: widget.deployment.copy(),
     velocityHud: _velocityHud,
+    soldier1PosHud: _soldier1PosHud,
   );
 
   @override
   void dispose() {
     _velocityHud.dispose();
+    _soldier1PosHud.dispose();
     super.dispose();
   }
 
@@ -73,6 +76,19 @@ class _WarScreenState extends State<WarScreen> {
                     return Text(
                       'v = (${v.x.toStringAsFixed(0)}, ${v.y.toStringAsFixed(0)})  '
                       '|v| = ${speed.toStringAsFixed(0)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white60,
+                            fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+                          ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 4),
+                ValueListenableBuilder<Vector2>(
+                  valueListenable: _soldier1PosHud,
+                  builder: (BuildContext context, Vector2 p, Widget? child) {
+                    return Text(
+                      'S1 = (${p.x.toStringAsFixed(1)}, ${p.y.toStringAsFixed(1)})',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Colors.white60,
                             fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],

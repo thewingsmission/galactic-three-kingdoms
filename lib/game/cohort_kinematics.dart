@@ -4,7 +4,6 @@ import 'package:flame/extensions.dart';
 
 import '../models/cohort_models.dart';
 import '../models/cohort_soldier.dart';
-import '../models/soldier_design_combat_metrics.dart';
 
 /// Default radius used when placing the first soldier on the inventory ring (`(0,-1)*r`).
 const double kCohortFormationRadius = 78;
@@ -60,9 +59,7 @@ class CohortRuntime {
         displayPalette: s.soldierDesign != null ? s.cohortPalette : null,
       );
       final SoldierContact? contactOverride = s.soldierDesign != null
-          ? SoldierContact(
-              radius: combatContactRadiusWorld(s.soldierDesign!.parts),
-            )
+          ? SoldierContact.fromDesign(s.soldierDesign!, model.paintSize)
           : null;
       return CohortSoldier(
         model: model,

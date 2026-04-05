@@ -1,5 +1,7 @@
-/// Range disk radii relative to **contact** radius — universal for every soldier (player + enemy).
-/// Attack = contact × 3; detection = contact × (attack × 7 × **1.6**) → **60% larger** than base 21×.
+/// Range disk radii relative to **contact** radius (fallback for soldiers without a design).
+/// Attack = contact × 3.
 const double kSoldierAttackRangeRadiusScale = 3;
-const double kSoldierDetectionRangeRadiusScale =
-    kSoldierAttackRangeRadiusScale * 7 * 1.6;
+
+/// Universal detection radius in **model units** — same for every soldier regardless of design.
+/// The war scene converts this to world units via the soldier's fit scale.
+const double kSoldierDetectionRadiusModelUnits = 200;

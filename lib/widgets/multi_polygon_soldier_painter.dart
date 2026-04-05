@@ -94,7 +94,8 @@ class MultiPolygonSoldierPainter extends CustomPainter {
     final List<List<Offset>?> fillX = <List<Offset>?>[];
     final List<List<Offset>?> strokeX = <List<Offset>?>[];
     for (final SoldierShapePart p in parts) {
-      if (p.stackRole == SoldierPartStackRole.contact) {
+      if (p.stackRole == SoldierPartStackRole.contact ||
+          p.stackRole == SoldierPartStackRole.engagement) {
         fillX.add(null);
         strokeX.add(null);
         continue;
@@ -135,7 +136,8 @@ class MultiPolygonSoldierPainter extends CustomPainter {
     final List<List<Offset>?> fillX = <List<Offset>?>[];
     final List<List<Offset>?> strokeX = <List<Offset>?>[];
     for (final SoldierShapePart p in parts) {
-      if (p.stackRole == SoldierPartStackRole.contact) {
+      if (p.stackRole == SoldierPartStackRole.contact ||
+          p.stackRole == SoldierPartStackRole.engagement) {
         fillX.add(null);
         strokeX.add(null);
         continue;

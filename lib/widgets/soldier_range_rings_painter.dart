@@ -9,7 +9,7 @@ import 'multi_polygon_soldier_painter.dart';
 /// War scene: simple circles. Detail dialog: pass [detailStableModelAnchor] matching
 /// [MultiPolygonSoldierPainter.fixedModelAnchor] so dot / detection / attack rings track model
 /// geometry instead of the shifting live bbox center. **Detection** radius =
-/// `contactRadius ×` [kSoldierDetectionRangeRadiusScale] (universal player + enemy).
+/// [kSoldierDetectionRadiusModelUnits] (200 model units, universal player + enemy).
 class SoldierRangeRingsPainter extends CustomPainter {
   SoldierRangeRingsPainter({
     required this.contactRadius,
@@ -126,7 +126,8 @@ class SoldierRangeRingsPainter extends CustomPainter {
 
     final List<Offset> all = <Offset>[];
     for (final SoldierShapePart p in parts) {
-      if (p.stackRole == SoldierPartStackRole.contact) {
+      if (p.stackRole == SoldierPartStackRole.contact ||
+          p.stackRole == SoldierPartStackRole.engagement) {
         continue;
       }
       _accumulateVerts(
@@ -264,6 +265,32 @@ class SoldierRangeRingsPainter extends CustomPainter {
         ..strokeJoin = StrokeJoin.round,
     );
 
+    // --- Engagement zone polygon ---
+    for (final SoldierShapePart p in parts) {
+      if (p.stackRole != SoldierPartStackRole.engagement) continue;
+      final List<Offset>? ev =
+          MultiPolygonSoldierPainter.transformedFillVertices(p, motionT, attackT);
+      if (ev == null || ev.length < 3) continue;
+      final Path engPath = Path();
+      final Offset e0 = toScreen(ev.first);
+      engPath.moveTo(e0.dx, e0.dy);
+      for (int i = 1; i < ev.length; i++) {
+        final Offset es = toScreen(ev[i]);
+        engPath.lineTo(es.dx, es.dy);
+      }
+      engPath.close();
+      final double engStroke = math.max(1.5, conStroke * 0.75);
+      canvas.drawPath(
+        engPath,
+        Paint()
+          ..color = const Color(0xFF2E7D32).withValues(alpha: 0.88)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = engStroke
+          ..strokeJoin = StrokeJoin.round,
+      );
+      break;
+    }
+
     Offset? crownCentroid;
     double crownCircumR = 0;
     for (final SoldierShapePart p in parts) {
@@ -320,7 +347,7 @@ class SoldierRangeRingsPainter extends CustomPainter {
     final double sWorld =
         worldToPixelScale(size, contactRadius, attackScale: attackScale);
     final double detectionPx =
-        contactRadius * kSoldierDetectionRangeRadiusScale * sWorld;
+        kSoldierDetectionRadiusModelUnits * sigma;
 
     Offset hubScreen = c;
     if (detailRangePlotHubModel != null) {

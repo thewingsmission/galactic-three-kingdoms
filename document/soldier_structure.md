@@ -1,6 +1,6 @@
 # Soldier object — design structure
 
-This document describes the **intended hierarchy** for one deployable soldier unit: a **container transform** (position, rotation, scale) with grouped visuals for core body, contact, attack, detection, and hub.
+This document describes the **intended hierarchy** for one deployable soldier unit: a **container transform** (position, rotation, scale) with grouped visuals for core body, contact, engagement, attack, detection, and hub.
 
 ---
 
@@ -15,18 +15,20 @@ Soldier container
 │   ├── Core body image component 2 (static or movable)
 │   ├── …
 │   ├── Core body image component N (static or movable)
-│   └── Contact zone image
+│   ├── Contact zone image
+│   └── Engagement zone image
 ├── Attack body container
 │   ├── Attack body image component 1 (static or movable)
 │   │   ├── Attack particle effect (optional)
-│   │   └── Attack zone image (optional)
+│   │   └── Hit zone image (optional)
 │   ├── Attack body image component 2 (static or movable)
 │   │   ├── Attack particle effect (optional)
-│   │   └── Attack zone image (optional)
+│   │   └── Hit zone image (optional)
 │   ├── …
 │   └── Attack body image component N (static or movable)
 │       ├── Attack particle effect (optional)
-│       └── Attack zone image (optional)
+│       └── Hit zone image (optional)
+├── Hit point bar image
 ├── Detection zone image
 └── Center dot image
 ```
@@ -35,7 +37,7 @@ Soldier container
 
 ## Example: Gilded Bastion
 
-Legendary design **Gilded Bastion** (`gilded_bastion_cat`) in the same hierarchy. Core numbering follows silhouette → face details → contact. **Attack** uses two components: the **underlay probe rod** (forward probe motion) and the **crown triangle** with optional **crown flames** and strike reach as children of the crown.
+Legendary design **Gilded Bastion** (`gilded_bastion_cat`) in the same hierarchy. Core numbering follows silhouette → face details → contact → engagement. **Attack** uses two components: the **underlay probe rod** (forward probe motion) and the **crown triangle** with optional **crown flames** and strike reach as children of the crown.
 
 ```
 Soldier container
@@ -58,12 +60,14 @@ Soldier container
 │   ├── Core body image component 16 (static — mouth outline)
 │   ├── Core body image component 17 (static — left side vertical)
 │   ├── Core body image component 18 (static — right side vertical)
-│   └── Contact zone image
+│   ├── Contact zone image
+│   └── Engagement zone image (rectangle — engagement reach ahead of body)
 ├── Attack body container
 │   ├── Attack body image component 1 (movable — underlay probe rod)
 │   └── Attack body image component 2 (movable — crown triangle)
 │       ├── Attack particle effect (optional — crown flames while probe active)
-│       └── Attack zone image (optional — crown strike reach disk)
+│       └── Hit zone image (optional — crown strike reach disk)
+├── Hit point bar image
 ├── Detection zone image
 └── Center dot image
 ```
@@ -84,6 +88,7 @@ Soldier container
 - **Children:**
   - **Core body image components (1…N):** Drawable layers (hull, limbs, details). Each may be **static** or **movable** (animation / procedural motion). Order **within** this container is also back-to-front unless overridden.
   - **Contact zone image:** Defines the **contact / collision footprint** (body contact with the world or other units). May be a visible outline or an **invisible** hull; either way it is the authoritative footprint for that container. Listed **after** the drawable core components in the tree.
+  - **Engagement zone image:** Defines the **engagement reach** — the area ahead of the soldier where combat begins. When this zone overlaps an opponent's contact zone, the soldier stops chasing and starts its attack cycle. Typically a rectangle projecting forward from the body (e.g. `(-6,-34), (6,-34), (6,-87), (-6,-87)` for Gilded Bastion). The engagement zone triggers the attack action; the **hit zone** (on the attack component) determines when damage is actually dealt.
 
 ### Attack body container
 
@@ -92,18 +97,25 @@ Soldier container
   - **Attack body image components (1…N):** Drawable pieces (weapons, crown, etc.). Each may be **static** or **movable**.
   - **Per component (optional):**
     - **Attack particle effect:** VFX bound to that component.
-    - **Attack zone image:** Visual for that component’s **strike reach** (arc, cone, disk, etc.).
+    - **Hit zone image:** Visual for that component's **damage reach** (arc, cone, disk, etc.). During the attack phase, damage is dealt when the hit zone overlaps the opponent's contact zone.
+
+### Hit point bar image
+
+- **Role:** Horizontal bar displaying remaining hit points as a fraction of max HP.
+- **Placement:** Direct child of **Soldier container**, **after** attack body container, **before** detection zone and center dot.
+- **Position:** Drawn above the soldier so it does not occlude the body or attack visuals.
+- **Behaviour:** Length shrinks proportionally as the soldier takes damage; hidden or removed when full HP (optional).
 
 ### Detection zone image
 
 - **Role:** Visual for **awareness / acquisition** range (typically larger than contact).
-- **Placement:** Direct child of **Soldier container**, **after** core and attack containers, **before** center dot.
+- **Placement:** Direct child of **Soldier container**, **after** hit point bar, **before** center dot.
 
 ### Center dot image
 
-- **Role:** Small **hub** marker for alignment (facing pivot, range ruler, UI / debug).
+- **Role:** Small **hub** marker at the soldier's **rotation pivot** (physics body center).
 - **Placement:** **Last** direct child of **Soldier container** so it draws **on top** of core, attack, and detection when paint order matches this document.
-- **Position:** Often at local `(0, 0)`; may be **offset** in model space per design (e.g. hub for range UI not at geometric centroid).
+- **Position:** At the body position — the point the soldier rotates around.
 
 ---
 
@@ -112,10 +124,11 @@ Soldier container
 | Group | Question it answers |
 |--------|---------------------|
 | **Soldier container** | Where is the unit, how is it oriented, how is it scaled? |
-| **Core body container** | What does the main body look like, and what is its contact footprint? |
+| **Core body container** | What does the main body look like, what is its contact footprint, and where is its engagement reach? |
 | **Attack body container** | What appears or moves when threatening, with optional FX and per-part reach? |
+| **Hit point bar image** | How much health does the unit have left? |
 | **Detection zone image** | How far can the unit notice targets? |
-| **Center dot image** | Where is the exact anchor / hub on that transform (including optional offset)? |
+| **Center dot image** | Where is the exact rotation pivot (body center)? |
 
 ---
 

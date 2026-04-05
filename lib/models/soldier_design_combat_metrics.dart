@@ -192,7 +192,7 @@ SoldierDesignCombatSnapshot soldierDesignCombatSnapshot(SoldierDesign design) {
 
   final double? crownR = _crownAttackRadiusModel(parts);
   final double attackR = crownR ?? (rContact * kSoldierAttackRangeRadiusScale);
-  final double detectR = rContact * kSoldierDetectionRangeRadiusScale;
+  final double detectR = kSoldierDetectionRadiusModelUnits;
   final double attackArea = math.pi * attackR * attackR;
 
   return SoldierDesignCombatSnapshot(

@@ -529,6 +529,18 @@ final SoldierDesign _kLegendaryCastleCat = SoldierDesign(
       strokeWidth: 0,
       stackRole: SoldierPartStackRole.contact,
     ),
+    SoldierShapePart(
+      fillVertices: const <Offset>[
+        Offset(-6, -34),
+        Offset(6, -34),
+        Offset(6, -87),
+        Offset(-6, -87),
+      ],
+      fillTier: 1,
+      transparentFill: true,
+      strokeWidth: 0,
+      stackRole: SoldierPartStackRole.engagement,
+    ),
   ],
   attack: const SoldierAttackSpec(
     mode: SoldierAttackMode.none,

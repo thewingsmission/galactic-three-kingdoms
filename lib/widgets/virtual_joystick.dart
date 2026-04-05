@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 /// Circular joystick: knob stays inside the outer ring. [onChanged] receives a vector whose
@@ -29,7 +27,7 @@ class VirtualJoystick extends StatefulWidget {
 class _VirtualJoystickState extends State<VirtualJoystick> {
   Offset _knob = Offset.zero;
 
-  double get _maxTravel => math.max(0, widget.outerRadius - widget.knobRadius);
+  double get _maxTravel => widget.outerRadius;
 
   void _updateKnob(Offset localPosition) {
     final double maxT = _maxTravel;
