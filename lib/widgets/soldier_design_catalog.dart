@@ -1844,9 +1844,13 @@ List<SoldierDesign> _legacyPromotedAsLegendary() {
 final List<SoldierDesign> _kRadialLegendaryDrafts =
     List<SoldierDesign>.unmodifiable(_buildTenRadialLegendaryDrafts());
 
-/// Validated tab: **11** promoted legacy drafts — all **legendary**.
+/// Validated tab: **11** promoted legacy drafts + 2 radial sigils — all **legendary**.
 final List<SoldierDesign> kValidatedSoldierDesignCatalog =
-    List<SoldierDesign>.unmodifiable(_legacyPromotedAsLegendary());
+    List<SoldierDesign>.unmodifiable(<SoldierDesign>[
+      ..._legacyPromotedAsLegendary(),
+      _kRadialLegendaryDrafts[5],
+      _kRadialLegendaryDrafts[6],
+    ]);
 
 final SoldierDesign _kProductionGildedBastion = SoldierDesign(
   id: 'gilded_bastion_prod',
@@ -1864,10 +1868,11 @@ final List<SoldierDesign> kProductionSoldierDesignCatalog =
       _kProductionGildedBastion,
     ]);
 
-/// Draft tab: **10** new crimson radial sigils (legendary).
-final List<SoldierDesign> kDraftSoldierDesignCatalog = _kRadialLegendaryDrafts;
+/// Draft tab: empty (all promoted or removed).
+final List<SoldierDesign> kDraftSoldierDesignCatalog =
+    List<SoldierDesign>.unmodifiable(<SoldierDesign>[]);
 
-/// Combined list for tooling (**11** validated + **1** production + **10** draft).
+/// Combined list for tooling (**13** validated + **1** production).
 final List<SoldierDesign> kSoldierDesignCatalog = List<SoldierDesign>.unmodifiable(
   <SoldierDesign>[
     ...kValidatedSoldierDesignCatalog,

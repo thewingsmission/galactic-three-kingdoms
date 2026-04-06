@@ -311,6 +311,7 @@ class CohortWarGame extends Forge2DGame {
     required this.velocityHud,
     required this.soldier1PosHud,
     this.onTargetAssigned,
+    this.onTargetCleared,
   }) : _deployment = deployment,
        _enemyPalettes = SoldierDesignPalette.values
            .where((SoldierDesignPalette p) => p != playerPalette)
@@ -326,6 +327,7 @@ class CohortWarGame extends Forge2DGame {
   final ValueNotifier<Vector2> velocityHud;
   final ValueNotifier<Vector2> soldier1PosHud;
   final VoidCallback? onTargetAssigned;
+  final VoidCallback? onTargetCleared;
   final ValueNotifier<bool> gameOver = ValueNotifier<bool>(false);
 
 
@@ -394,8 +396,21 @@ class CohortWarGame extends Forge2DGame {
         _autoPickClosestTarget();
       }
     } else {
-      _targetEnemyIndex = null;
+      _clearTargetWithEffect();
     }
+  }
+
+  void _clearTargetWithEffect() {
+    if (_targetEnemyIndex == null) return;
+    final int idx = _targetEnemyIndex!;
+    if (idx < enemySoldiers.length && _enemyAlive[idx]) {
+      final List<Color> tier = factionTierList(enemySoldiers[idx].palette);
+      world.add(_TargetUnlockBurst(
+        worldPos: enemySoldiers[idx].body.body.position.clone(),
+        colors: tier,
+      ));
+    }
+    _targetEnemyIndex = null;
   }
 
   void _autoPickClosestTarget() {
@@ -1328,7 +1343,8 @@ class CohortWarGame extends Forge2DGame {
     // Clear target when joystick active; reassign when target dies.
     if (_targetEnemyIndex != null) {
       if (_playerCohortMoving()) {
-        _targetEnemyIndex = null;
+        _clearTargetWithEffect();
+        onTargetCleared?.call();
       } else if (!_enemyAlive[_targetEnemyIndex!]) {
         _autoPickClosestTarget();
       }
@@ -1734,7 +1750,7 @@ class _FloatingDamageText extends Component {
         text: '$amount',
         style: TextStyle(
           color: color.withValues(alpha: alpha),
-          fontSize: 12 * scale,
+          fontSize: 17.5 * scale,
           fontWeight: FontWeight.w900,
           shadows: <Shadow>[
             Shadow(
@@ -2669,5 +2685,91 @@ class _TargetLockBurst extends Component {
         Paint()..color = colors[1].withValues(alpha: flashAlpha),
       );
     }
+  }
+}
+
+class _TargetUnlockBurst extends Component {
+  _TargetUnlockBurst({required this.worldPos, required this.colors});
+
+  final Vector2 worldPos;
+  final List<Color> colors;
+
+  static const double _duration = 0.5;
+  static const double _startR = 10.0;
+  static const double _endR = 70.0;
+  static const double _xSize = 14.0;
+
+  double _t = 0;
+
+  @override
+  int get priority => 35;
+
+  @override
+  void update(double dt) {
+    _t += dt / _duration;
+    if (_t >= 1.0) removeFromParent();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final double t = _t.clamp(0.0, 1.0);
+    final double ox = worldPos.x, oy = worldPos.y;
+    final Offset center = Offset(ox, oy);
+    final double ease = Curves.easeOut.transform(t);
+    final double fade = (1.0 - t).clamp(0.0, 1.0);
+
+    final double ringR = _startR + (_endR - _startR) * ease;
+    canvas.drawCircle(
+      center,
+      ringR,
+      Paint()
+        ..color = colors[0].withValues(alpha: fade)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5.0 * fade + 1.0,
+    );
+
+    if (t > 0.08) {
+      final double t2 = ((t - 0.08) / 0.92).clamp(0.0, 1.0);
+      final double ease2 = Curves.easeOut.transform(t2);
+      final double fade2 = (1.0 - t2).clamp(0.0, 1.0);
+      final double ring2R = _startR * 0.6 + (_endR * 1.2 - _startR * 0.6) * ease2;
+      canvas.drawCircle(
+        center,
+        ring2R,
+        Paint()
+          ..color = colors[2].withValues(alpha: fade2)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4.0 * fade2 + 0.8,
+      );
+    }
+
+    if (t > 0.18) {
+      final double t3 = ((t - 0.18) / 0.82).clamp(0.0, 1.0);
+      final double ease3 = Curves.easeOut.transform(t3);
+      final double fade3 = (1.0 - t3).clamp(0.0, 1.0);
+      final double ring3R = _startR * 0.3 + (_endR * 1.4 - _startR * 0.3) * ease3;
+      canvas.drawCircle(
+        center,
+        ring3R,
+        Paint()
+          ..color = colors[1].withValues(alpha: fade3 * 0.9)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.0 * fade3 + 0.5,
+      );
+    }
+
+    final double xFade = (t < 0.12 ? t / 0.12 : fade).clamp(0.0, 1.0);
+    final double xS = _xSize * (0.8 + 0.2 * ease);
+    final Paint xPaint = Paint()
+      ..color = colors[0].withValues(alpha: xFade)
+      ..strokeWidth = 4.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(
+      Offset(ox - xS, oy - xS), Offset(ox + xS, oy + xS), xPaint,
+    );
+    canvas.drawLine(
+      Offset(ox + xS, oy - xS), Offset(ox - xS, oy + xS), xPaint,
+    );
   }
 }

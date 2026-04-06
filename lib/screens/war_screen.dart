@@ -33,6 +33,7 @@ class _WarScreenState extends State<WarScreen>
   late CohortWarGame _game;
   Key _gameKey = UniqueKey();
   WarActionMode _actionMode = WarActionMode.defense;
+  WarActionMode _preTargetMode = WarActionMode.defense;
   WarActionMode? _pressedButton;
   late final AnimationController _glowCtrl;
 
@@ -41,9 +42,17 @@ class _WarScreenState extends State<WarScreen>
 
   void _selectMode(WarActionMode mode) {
     if (_actionMode == mode) return;
+    if (mode == WarActionMode.target && _actionMode != WarActionMode.target) {
+      _preTargetMode = _actionMode;
+    }
     setState(() => _actionMode = mode);
     _game.setActionMode(mode);
-    _glowCtrl.forward(from: 0);
+  }
+
+  void _revertFromTarget() {
+    if (_actionMode != WarActionMode.target) return;
+    setState(() => _actionMode = _preTargetMode);
+    _game.setActionMode(_preTargetMode);
   }
 
   @override
@@ -51,8 +60,9 @@ class _WarScreenState extends State<WarScreen>
     super.initState();
     _glowCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 1200),
     );
+    _glowCtrl.repeat();
     _game = _createGame();
   }
 
@@ -63,6 +73,7 @@ class _WarScreenState extends State<WarScreen>
       velocityHud: _velocityHud,
       soldier1PosHud: _soldier1PosHud,
       onTargetAssigned: () => _selectMode(WarActionMode.target),
+      onTargetCleared: () => _revertFromTarget(),
     );
   }
 
@@ -72,6 +83,7 @@ class _WarScreenState extends State<WarScreen>
       _game.setActionMode(WarActionMode.defense);
       _gameKey = UniqueKey();
       _actionMode = WarActionMode.defense;
+      _preTargetMode = WarActionMode.defense;
     });
   }
 
@@ -117,16 +129,16 @@ class _WarScreenState extends State<WarScreen>
             child: AnimatedBuilder(
               animation: _glowCtrl,
               builder: (BuildContext context, Widget? child) {
-                final bool glowing = selected && _glowCtrl.isAnimating;
-                final double glowT = glowing ? _glowCtrl.value : 0;
-                final double glowOpacity = glowT > 0
-                    ? (1.0 - glowT).clamp(0.0, 1.0)
+                final double rawT = _glowCtrl.value;
+                final double pulseT = selected
+                    ? (rawT < 0.5 ? rawT * 2 : 2.0 - rawT * 2)
                     : 0;
-                final double glowSpread = glowT * 22;
+                final double glowOpacity = pulseT * 0.8;
+                final double glowSpread = pulseT * 14;
                 return CustomPaint(
-                  painter: glowOpacity > 0
+                  painter: selected
                       ? _ButtonBurstPainter(
-                          t: glowT,
+                          t: rawT,
                           color: outlineColor,
                           radius: size / 2,
                         )
@@ -338,46 +350,31 @@ class _ButtonBurstPainter extends CustomPainter {
   final Color color;
   final double radius;
 
-  static const int _particleCount = 14;
+  static const int _particleCount = 10;
 
   @override
   void paint(Canvas canvas, Size size) {
     final Offset center = Offset(size.width / 2, size.height / 2);
-
-    final double burstRadius = radius + 4 + 22 * Curves.easeOut.transform(t);
-    final double fadeOut = (1.0 - t).clamp(0.0, 1.0);
+    final double orbitR = radius + 8;
 
     for (int i = 0; i < _particleCount; i++) {
       final double baseAngle = (i / _particleCount) * 2 * math.pi;
-      final double jitter = (i.isEven ? 0.15 : -0.1) * (i % 3 + 1);
-      final double angle = baseAngle + jitter + t * 1.2;
+      final double angle = baseAngle + t * 2 * math.pi;
 
-      final double speed = 0.7 + 0.3 * ((i * 7 + 3) % 5) / 4.0;
-      final double dist = burstRadius * speed;
+      final double wobble = 1.0 + 0.15 * math.sin(t * 4 * math.pi + i * 1.3);
+      final double dist = orbitR * wobble;
 
       final double px = center.dx + math.cos(angle) * dist;
       final double py = center.dy + math.sin(angle) * dist;
 
-      final double particleSize = (3.0 + 2.0 * ((i * 3) % 4)) * (1.0 - t * 0.5);
-      final double alpha = fadeOut * (0.7 + 0.3 * ((i + 2) % 3) / 2.0);
+      final double pulse = 0.6 + 0.4 * math.sin(t * 2 * math.pi + i * 0.9);
+      final double particleSize = (2.0 + 1.5 * ((i * 3) % 4)) * pulse;
+      final double alpha = 0.4 + 0.4 * pulse;
 
       canvas.drawCircle(
         Offset(px, py),
         particleSize,
         Paint()..color = color.withValues(alpha: alpha),
-      );
-    }
-
-    if (t < 0.5) {
-      final double ringAlpha = ((0.5 - t) / 0.5).clamp(0.0, 1.0) * 0.8;
-      final double ringR = radius + 6 * Curves.easeOut.transform(t * 2);
-      canvas.drawCircle(
-        center,
-        ringR,
-        Paint()
-          ..color = color.withValues(alpha: ringAlpha)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5 * (1.0 - t * 2).clamp(0.3, 1.0),
       );
     }
   }
