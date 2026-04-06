@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
@@ -23,7 +25,8 @@ class WarScreen extends StatefulWidget {
   State<WarScreen> createState() => _WarScreenState();
 }
 
-class _WarScreenState extends State<WarScreen> {
+class _WarScreenState extends State<WarScreen>
+    with SingleTickerProviderStateMixin {
   final ValueNotifier<Vector2> _velocityHud =
       ValueNotifier<Vector2>(Vector2.zero());
   final ValueNotifier<Vector2> _soldier1PosHud =
@@ -33,13 +36,24 @@ class _WarScreenState extends State<WarScreen> {
   Key _gameKey = UniqueKey();
   WarActionMode _actionMode = WarActionMode.defense;
   WarActionMode? _pressedButton;
+  late final AnimationController _glowCtrl;
 
   static const double _btnRadius = 44.8;
   static const double _btnDiameter = _btnRadius * 2;
 
+  void _selectMode(WarActionMode mode) {
+    if (_actionMode == mode) return;
+    setState(() => _actionMode = mode);
+    _glowCtrl.forward(from: 0);
+  }
+
   @override
   void initState() {
     super.initState();
+    _glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
     _game = _createGame();
   }
 
@@ -49,9 +63,7 @@ class _WarScreenState extends State<WarScreen> {
       playerPalette: widget.playerPalette,
       velocityHud: _velocityHud,
       soldier1PosHud: _soldier1PosHud,
-      onTargetAssigned: () {
-        setState(() => _actionMode = WarActionMode.target);
-      },
+      onTargetAssigned: () => _selectMode(WarActionMode.target),
     );
   }
 
@@ -65,6 +77,7 @@ class _WarScreenState extends State<WarScreen> {
 
   @override
   void dispose() {
+    _glowCtrl.dispose();
     _velocityHud.dispose();
     _soldier1PosHud.dispose();
     super.dispose();
@@ -96,23 +109,53 @@ class _WarScreenState extends State<WarScreen> {
         children: <Widget>[
           GestureDetector(
             onTapDown: (_) => setState(() => _pressedButton = mode),
-            onTapUp: (_) => setState(() {
-              _actionMode = mode;
-              _pressedButton = null;
-            }),
+            onTapUp: (_) {
+              setState(() => _pressedButton = null);
+              _selectMode(mode);
+            },
             onTapCancel: () => setState(() => _pressedButton = null),
-            child: Container(
-              width: size,
-              height: size,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _paler(fillColor),
-                border: Border.all(
-                  color: outlineColor,
-                  width: (scale > 1.0) ? 5.0 : 3.5,
-                ),
-              ),
+            child: AnimatedBuilder(
+              animation: _glowCtrl,
+              builder: (BuildContext context, Widget? child) {
+                final bool glowing = selected && _glowCtrl.isAnimating;
+                final double glowT = glowing ? _glowCtrl.value : 0;
+                final double glowOpacity = glowT > 0
+                    ? (1.0 - glowT).clamp(0.0, 1.0)
+                    : 0;
+                final double glowSpread = glowT * 22;
+                return CustomPaint(
+                  painter: glowOpacity > 0
+                      ? _ButtonBurstPainter(
+                          t: glowT,
+                          color: outlineColor,
+                          radius: size / 2,
+                        )
+                      : null,
+                  child: Container(
+                    width: size,
+                    height: size,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _paler(fillColor),
+                      border: Border.all(
+                        color: outlineColor,
+                        width: (scale > 1.0) ? 5.0 : 3.5,
+                      ),
+                      boxShadow: glowOpacity > 0
+                          ? <BoxShadow>[
+                              BoxShadow(
+                                color: outlineColor.withValues(alpha: glowOpacity * 0.95),
+                                blurRadius: 16 + glowSpread,
+                                spreadRadius: glowSpread,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: child,
+                  ),
+                );
+              },
               child: Transform.translate(
                 offset: imageOffset,
                 child: Transform.scale(
@@ -282,4 +325,64 @@ class _WarScreenState extends State<WarScreen> {
       ),
     );
   }
+}
+
+class _ButtonBurstPainter extends CustomPainter {
+  _ButtonBurstPainter({
+    required this.t,
+    required this.color,
+    required this.radius,
+  });
+
+  final double t;
+  final Color color;
+  final double radius;
+
+  static const int _particleCount = 14;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Offset center = Offset(size.width / 2, size.height / 2);
+
+    final double burstRadius = radius + 4 + 22 * Curves.easeOut.transform(t);
+    final double fadeOut = (1.0 - t).clamp(0.0, 1.0);
+
+    for (int i = 0; i < _particleCount; i++) {
+      final double baseAngle = (i / _particleCount) * 2 * math.pi;
+      final double jitter = (i.isEven ? 0.15 : -0.1) * (i % 3 + 1);
+      final double angle = baseAngle + jitter + t * 1.2;
+
+      final double speed = 0.7 + 0.3 * ((i * 7 + 3) % 5) / 4.0;
+      final double dist = burstRadius * speed;
+
+      final double px = center.dx + math.cos(angle) * dist;
+      final double py = center.dy + math.sin(angle) * dist;
+
+      final double particleSize = (3.0 + 2.0 * ((i * 3) % 4)) * (1.0 - t * 0.5);
+      final double alpha = fadeOut * (0.7 + 0.3 * ((i + 2) % 3) / 2.0);
+
+      canvas.drawCircle(
+        Offset(px, py),
+        particleSize,
+        Paint()..color = color.withValues(alpha: alpha),
+      );
+    }
+
+    if (t < 0.5) {
+      final double ringAlpha = ((0.5 - t) / 0.5).clamp(0.0, 1.0) * 0.8;
+      final double ringR = radius + 6 * Curves.easeOut.transform(t * 2);
+      canvas.drawCircle(
+        center,
+        ringR,
+        Paint()
+          ..color = color.withValues(alpha: ringAlpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5 * (1.0 - t * 2).clamp(0.3, 1.0),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ButtonBurstPainter oldDelegate) =>
+      oldDelegate.t != t || oldDelegate.color != color;
 }

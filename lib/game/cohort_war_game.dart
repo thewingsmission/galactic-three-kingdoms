@@ -423,6 +423,9 @@ class CohortWarGame extends Forge2DGame {
     }
     if (best != null) {
       _targetEnemyIndex = best;
+      final Vector2 pos = enemySoldiers[best].body.body.position;
+      final List<Color> tier = factionTierList(enemySoldiers[best].palette);
+      world.add(_TargetLockBurst(worldPos: pos.clone(), colors: tier));
       onTargetAssigned?.call();
     }
   }
@@ -2344,5 +2347,129 @@ class _TargetEnemyIndicator extends Component {
       ..close();
     canvas.drawPath(tri, fill);
     canvas.drawPath(tri, stroke);
+  }
+}
+
+class _TargetLockBurst extends Component {
+  _TargetLockBurst({required this.worldPos, required this.colors});
+
+  final Vector2 worldPos;
+  final List<Color> colors;
+
+  static const double _duration = 0.7;
+  static const double _outerStartR = 84.0;
+  static const double _outerEndR = 12.0;
+  static const int _tickCount = 8;
+  static const int _crosshairCount = 4;
+
+  double _t = 0;
+
+  @override
+  int get priority => 35;
+
+  @override
+  void update(double dt) {
+    _t += dt / _duration;
+    if (_t >= 1.0) {
+      removeFromParent();
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final double t = _t.clamp(0.0, 1.0);
+    final double ox = worldPos.x, oy = worldPos.y;
+    final Offset center = Offset(ox, oy);
+
+    final double ease = Curves.easeInOutCubic.transform(t);
+
+    // --- Primary ring: shrinks from large to small ---
+    final double ringR = _outerStartR + (_outerEndR - _outerStartR) * ease;
+    final double ringAlpha = t < 0.8 ? 1.0 : ((1.0 - t) / 0.2).clamp(0.0, 1.0);
+    canvas.drawCircle(
+      center,
+      ringR,
+      Paint()
+        ..color = colors[0].withValues(alpha: ringAlpha)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.5 + 2.0 * (1.0 - ease),
+    );
+
+    // --- Second ring: delayed, starts larger, converges ---
+    if (t > 0.08) {
+      final double t2 = ((t - 0.08) / 0.92).clamp(0.0, 1.0);
+      final double ease2 = Curves.easeInOutCubic.transform(t2);
+      final double ring2R =
+          _outerStartR * 1.4 + (_outerEndR * 0.6 - _outerStartR * 1.4) * ease2;
+      final double ring2Alpha =
+          t2 < 0.8 ? 0.9 : ((1.0 - t2) / 0.2).clamp(0.0, 1.0) * 0.9;
+      canvas.drawCircle(
+        center,
+        ring2R,
+        Paint()
+          ..color = colors[2].withValues(alpha: ring2Alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0 + 1.5 * (1.0 - ease2),
+      );
+    }
+
+    // --- Crosshair lines converging inward ---
+    final double lineOuter = ringR + 10 * (1.0 - ease);
+    final double lineInner = ringR * 0.35;
+    final double lineAlpha = ringAlpha;
+    final Paint linePaint = Paint()
+      ..color = colors[0].withValues(alpha: lineAlpha)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+    for (int i = 0; i < _crosshairCount; i++) {
+      final double angle = (i / _crosshairCount) * 2 * math.pi;
+      final double c = math.cos(angle), s = math.sin(angle);
+      canvas.drawLine(
+        Offset(ox + c * lineInner, oy + s * lineInner),
+        Offset(ox + c * lineOuter, oy + s * lineOuter),
+        linePaint,
+      );
+    }
+
+    // --- Tick marks around the ring ---
+    final double tickLen = 6.0 + 4.0 * (1.0 - ease);
+    final Paint tickPaint = Paint()
+      ..color = colors[2].withValues(alpha: ringAlpha * 0.9)
+      ..strokeWidth = 1.8
+      ..style = PaintingStyle.stroke;
+    for (int i = 0; i < _tickCount; i++) {
+      final double angle =
+          (i / _tickCount) * 2 * math.pi + math.pi / _tickCount;
+      final double c = math.cos(angle), s = math.sin(angle);
+      canvas.drawLine(
+        Offset(ox + c * (ringR - tickLen), oy + s * (ringR - tickLen)),
+        Offset(ox + c * (ringR + tickLen), oy + s * (ringR + tickLen)),
+        tickPaint,
+      );
+    }
+
+    // --- Center dot snap (appears in final 30%) ---
+    if (t > 0.7) {
+      final double dotT = ((t - 0.7) / 0.3).clamp(0.0, 1.0);
+      final double dotR = 4.0 * Curves.easeOut.transform(dotT);
+      final double dotAlpha = (1.0 - dotT * 0.3).clamp(0.0, 1.0);
+      canvas.drawCircle(
+        center,
+        dotR,
+        Paint()..color = colors[1].withValues(alpha: dotAlpha),
+      );
+    }
+
+    // --- Flash on lock (last 15%) ---
+    if (t > 0.85) {
+      final double flashT = ((t - 0.85) / 0.15).clamp(0.0, 1.0);
+      final double flashR = 20 * Curves.easeOut.transform(flashT);
+      final double flashAlpha = (1.0 - flashT).clamp(0.0, 1.0) * 0.8;
+      canvas.drawCircle(
+        center,
+        flashR,
+        Paint()..color = colors[1].withValues(alpha: flashAlpha),
+      );
+    }
   }
 }
