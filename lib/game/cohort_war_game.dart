@@ -261,6 +261,8 @@ double _segDistSq(Vector2 a, Vector2 b, Vector2 p) {
   return (p - proj).length2;
 }
 
+enum WarActionMode { attack, defense, target }
+
 // ---------------------------------------------------------------------------
 // Combat constants
 // ---------------------------------------------------------------------------
@@ -385,6 +387,42 @@ class CohortWarGame extends Forge2DGame {
   late List<double> _enemyKnockbackTimer;
 
   int? _targetEnemyIndex;
+  WarActionMode _actionMode = WarActionMode.defense;
+
+  void setActionMode(WarActionMode mode) {
+    _actionMode = mode;
+    if (mode == WarActionMode.target) {
+      if (_targetEnemyIndex == null) {
+        _autoPickClosestTarget();
+      }
+    } else {
+      _targetEnemyIndex = null;
+    }
+  }
+
+  void _autoPickClosestTarget() {
+    final Vector2 leaderPos = _leaderBody.position;
+    int? best;
+    double bestDist2 = double.infinity;
+    for (int ei = 0; ei < enemySoldiers.length; ei++) {
+      if (!_enemyAlive[ei]) continue;
+      final double d2 =
+          (enemySoldiers[ei].body.body.position - leaderPos).length2;
+      if (d2 < bestDist2) {
+        bestDist2 = d2;
+        best = ei;
+      }
+    }
+    if (best != null) {
+      _targetEnemyIndex = best;
+      final int capturedIdx = best;
+      final List<Color> tier = factionTierList(enemySoldiers[best].palette);
+      world.add(_TargetLockBurst(
+        positionGetter: () => enemySoldiers[capturedIdx].body.body.position,
+        colors: tier,
+      ));
+    }
+  }
 
   void setStick(Offset normalized) {
     stick.setValues(normalized.dx, normalized.dy);
@@ -423,9 +461,12 @@ class CohortWarGame extends Forge2DGame {
     }
     if (best != null) {
       _targetEnemyIndex = best;
-      final Vector2 pos = enemySoldiers[best].body.body.position;
+      final int capturedIdx = best;
       final List<Color> tier = factionTierList(enemySoldiers[best].palette);
-      world.add(_TargetLockBurst(worldPos: pos.clone(), colors: tier));
+      world.add(_TargetLockBurst(
+        positionGetter: () => enemySoldiers[capturedIdx].body.body.position,
+        colors: tier,
+      ));
       onTargetAssigned?.call();
     }
   }
@@ -895,19 +936,87 @@ class CohortWarGame extends Forge2DGame {
             : playerCohort.visualAngle;
       }
     } else {
-      final String? ed = _earliestEnemyInDetectionForPlayer(i);
-      if (ed != null) {
-        final Vector2 d = _enemyWorldPosFromKey(ed) - p;
-        angle = d.length2 < 1e-12 ? _lastPlayerFacing[i] : _aimAngleToward(d);
-      } else {
-        angle = _lastPlayerFacing[i];
-      }
+      angle = _playerNeutralFacing(i, p);
     }
 
-    if (moving || _earliestEnemyInDetectionForPlayer(i) != null) {
+    if (moving || angle != _lastPlayerFacing[i]) {
       _lastPlayerFacing[i] = angle;
     }
     return angle;
+  }
+
+  double _playerNeutralFacing(int i, Vector2 p) {
+    switch (_actionMode) {
+      case WarActionMode.attack:
+        return _playerNeutralFacingAttack(i, p);
+      case WarActionMode.defense:
+        return _playerNeutralFacingDefense(i, p);
+      case WarActionMode.target:
+        return _playerNeutralFacingTarget(i, p);
+    }
+  }
+
+  double _playerNeutralFacingAttack(int i, Vector2 p) {
+    final String? ed = _earliestEnemyInDetectionForPlayer(i);
+    if (ed != null) {
+      final Vector2 d = _enemyWorldPosFromKey(ed) - p;
+      return d.length2 < 1e-12 ? _lastPlayerFacing[i] : _aimAngleToward(d);
+    }
+    return _lastPlayerFacing[i];
+  }
+
+  double _playerNeutralFacingDefense(int i, Vector2 p) {
+    // Priority 1: engagement zone touches enemy contact → face that enemy
+    final String? ea = _earliestEnemyInEngagementForPlayer(i);
+    if (ea != null) {
+      final Vector2 d = _enemyWorldPosFromKey(ea) - p;
+      return d.length2 < 1e-12 ? _lastPlayerFacing[i] : _aimAngleToward(d);
+    }
+    // Priority 2: enemy center in detection zone → face that enemy
+    final String? ed = _earliestEnemyInDetectionForPlayer(i);
+    if (ed != null) {
+      final Vector2 d = _enemyWorldPosFromKey(ed) - p;
+      return d.length2 < 1e-12 ? _lastPlayerFacing[i] : _aimAngleToward(d);
+    }
+    return _lastPlayerFacing[i];
+  }
+
+  double _playerNeutralFacingTarget(int i, Vector2 p) {
+    // If engagement zone overlaps any enemy contact, face that enemy
+    // (with priority: target enemy if present, otherwise earliest).
+    final String? ea = _playerEngagedEnemyInTargetMode(i);
+    if (ea != null) {
+      final Vector2 d = _enemyWorldPosFromKey(ea) - p;
+      return d.length2 < 1e-12 ? _lastPlayerFacing[i] : _aimAngleToward(d);
+    }
+    // Otherwise face the target enemy.
+    if (_targetEnemyIndex != null &&
+        _targetEnemyIndex! < enemySoldiers.length &&
+        _enemyAlive[_targetEnemyIndex!]) {
+      final Vector2 d = enemySoldiers[_targetEnemyIndex!].body.body.position - p;
+      return d.length2 < 1e-12 ? _lastPlayerFacing[i] : _aimAngleToward(d);
+    }
+    return _lastPlayerFacing[i];
+  }
+
+  /// In target mode, find the enemy whose contact zone overlaps soldier i's
+  /// engagement zone. Prefers the target enemy if it's among them, otherwise
+  /// returns the earliest entry.
+  String? _playerEngagedEnemyInTargetMode(int i) {
+    final Set<String> engaged = <String>{};
+    for (int ei = 0; ei < enemySoldiers.length; ei++) {
+      if (!_enemyAlive[ei]) continue;
+      final String k = 'e-$ei';
+      if (_enemyContactInPlayerEngagementZone(i, k)) {
+        engaged.add(k);
+      }
+    }
+    if (engaged.isEmpty) return null;
+    if (_targetEnemyIndex != null) {
+      final String tk = 'e-$_targetEnemyIndex';
+      if (engaged.contains(tk)) return tk;
+    }
+    return _earliestKeyInSet(engaged, _playerAttackEntry[i]);
   }
 
   double _enemySoldierFacingAngle(int enemyIndex) {
@@ -974,16 +1083,17 @@ class CohortWarGame extends Forge2DGame {
       for (int i = 0; i < playerSoldierBodies.length; i++) {
         if (!_playerAlive[i]) continue;
         if (_playerKnockbackTimer[i] > 0) continue;
-        final String? ed = _earliestEnemyInDetectionForPlayer(i);
-        if (ed == null) continue;
-        if (_enemyContactInPlayerEngagementZone(i, ed)) {
-          playerSoldierBodies[i].body.linearVelocity.setZero();
-          continue;
+
+        switch (_actionMode) {
+          case WarActionMode.attack:
+            _applyPlayerChaseAttackMode(i);
+          case WarActionMode.defense:
+            // Defense: no chasing — soldiers stay in formation.
+            // But if engagement zone touches enemy, stop moving (hold).
+            break;
+          case WarActionMode.target:
+            _applyPlayerChaseTargetMode(i);
         }
-        _applyChaseVelocityToward(
-          playerSoldierBodies[i].body,
-          _enemyWorldPosFromKey(ed),
-        );
       }
     }
 
@@ -1003,6 +1113,38 @@ class CohortWarGame extends Forge2DGame {
       _applyChaseVelocityToward(
         enemySoldiers[ei].body.body,
         _targetWorldPos(pd),
+      );
+    }
+  }
+
+  void _applyPlayerChaseAttackMode(int i) {
+    final String? ed = _earliestEnemyInDetectionForPlayer(i);
+    if (ed == null) return;
+    if (_enemyContactInPlayerEngagementZone(i, ed)) {
+      playerSoldierBodies[i].body.linearVelocity.setZero();
+      return;
+    }
+    _applyChaseVelocityToward(
+      playerSoldierBodies[i].body,
+      _enemyWorldPosFromKey(ed),
+    );
+  }
+
+  void _applyPlayerChaseTargetMode(int i) {
+    if (_targetEnemyIndex == null) return;
+
+    final String? engagedEnemy = _earliestEnemyInEngagementForPlayer(i);
+    if (engagedEnemy != null) {
+      playerSoldierBodies[i].body.linearVelocity.setZero();
+      return;
+    }
+
+    // Chase the target enemy.
+    if (_targetEnemyIndex! < enemySoldiers.length &&
+        _enemyAlive[_targetEnemyIndex!]) {
+      _applyChaseVelocityToward(
+        playerSoldierBodies[i].body,
+        enemySoldiers[_targetEnemyIndex!].body.body.position,
       );
     }
   }
@@ -1113,15 +1255,30 @@ class CohortWarGame extends Forge2DGame {
     final Vector2 lc = _leaderBody.position;
     final Vector2 vLeader = _leaderBody.linearVelocity;
     final double c = soldierFormationVelDamp;
+    final bool neutral = !_playerCohortMoving();
 
     for (int i = 0; i < playerSoldierBodies.length; i++) {
       if (i == _leaderIndex) continue;
       if (!_playerAlive[i]) continue;
       if (_playerKnockbackTimer[i] > 0) continue;
-      if (!_playerCohortMoving() &&
-          _earliestEnemyInDetectionForPlayer(i) != null) {
-        continue;
+
+      bool skipFormation = false;
+      if (neutral) {
+        switch (_actionMode) {
+          case WarActionMode.attack:
+            if (_earliestEnemyInDetectionForPlayer(i) != null) {
+              skipFormation = true;
+            }
+          case WarActionMode.defense:
+            skipFormation = false;
+          case WarActionMode.target:
+            if (_targetEnemyIndex != null) {
+              skipFormation = true;
+            }
+        }
       }
+      if (skipFormation) continue;
+
       final Body b = playerSoldierBodies[i].body;
       final Vector2 target = lc + playerCohort.formationTargetLocal(i);
       final Vector2 err = target - b.position;
@@ -1172,11 +1329,12 @@ class CohortWarGame extends Forge2DGame {
   void update(double dt) {
     if (gameOver.value) return;
 
-    // Clear target enemy when joystick is active or target is dead.
+    // Clear target when joystick active; reassign when target dies.
     if (_targetEnemyIndex != null) {
-      if (_playerCohortMoving() ||
-          !_enemyAlive[_targetEnemyIndex!]) {
+      if (_playerCohortMoving()) {
         _targetEnemyIndex = null;
+      } else if (!_enemyAlive[_targetEnemyIndex!]) {
+        _autoPickClosestTarget();
       }
     }
 
@@ -1218,24 +1376,71 @@ class CohortWarGame extends Forge2DGame {
     return MultiPolygonSoldierPainter.attackProbeEnvelope(cycleT) > 0;
   }
 
+  /// Attack mode lock while moving: detection → engagement priority.
+  String? _playerCombatLockTargetMoving(int i) {
+    final String? ea = _earliestEnemyInEngagementForPlayer(i);
+    return ea ?? _earliestEnemyInDetectionForPlayer(i);
+  }
+
+  /// Neutral-stick lock target depends on action mode.
+  String? _playerCombatLockTarget(int i) {
+    switch (_actionMode) {
+      case WarActionMode.attack:
+        return _earliestEnemyInDetectionForPlayer(i);
+      case WarActionMode.defense:
+        return _playerDefenseLockTarget(i);
+      case WarActionMode.target:
+        return _playerTargetModeLockTarget(i);
+    }
+  }
+
+  /// Defense mode: engagement zone touching enemy contact → lock (earliest).
+  /// Then detection zone containing enemy center → lock (earliest).
+  /// Engagement takes priority for facing/attacking.
+  String? _playerDefenseLockTarget(int i) {
+    final String? ea = _earliestEnemyInEngagementForPlayer(i);
+    if (ea != null) return ea;
+    final String? ed = _earliestEnemyInDetectionForPlayer(i);
+    return ed;
+  }
+
+  /// Target mode: if engagement zone overlaps enemy contacts, prefer the
+  /// target enemy among them (case b), otherwise earliest (case a).
+  /// If no engagement overlap, lock the target enemy for chasing.
+  String? _playerTargetModeLockTarget(int i) {
+    final String? engaged = _playerEngagedEnemyInTargetMode(i);
+    if (engaged != null) return engaged;
+    if (_targetEnemyIndex != null &&
+        _targetEnemyIndex! < enemySoldiers.length &&
+        _enemyAlive[_targetEnemyIndex!]) {
+      return 'e-$_targetEnemyIndex';
+    }
+    return null;
+  }
+
   void _updateCombat(double dt) {
     final double dtNorm = dt / kAttackCycleSeconds;
+    final bool neutral = !_playerCohortMoving();
 
     // --- Player soldiers ---
     for (int i = 0; i < playerCohort.soldierCount; i++) {
       if (!_playerAlive[i]) continue;
 
-      final String? detected = _earliestEnemyInDetectionForPlayer(i);
-      if (detected == null) {
+      // Determine lock target based on action mode (only when neutral).
+      final String? lockTarget = neutral
+          ? _playerCombatLockTarget(i)
+          : _playerCombatLockTargetMoving(i);
+
+      if (lockTarget == null) {
         _playerLockedEnemy[i] = null;
         _playerAttackCycleT[i] = 0;
         _playerDamagedThisPhase[i].clear();
         _playerWasInAttackPhase[i] = false;
         continue;
       }
-      _playerLockedEnemy[i] ??= detected;
-      if (!_playerDetectionEntry[i].containsKey(_playerLockedEnemy[i])) {
-        _playerLockedEnemy[i] = detected;
+
+      if (_playerLockedEnemy[i] != lockTarget) {
+        _playerLockedEnemy[i] = lockTarget;
         _playerAttackCycleT[i] = 0;
         _playerDamagedThisPhase[i].clear();
         _playerWasInAttackPhase[i] = false;
@@ -1244,7 +1449,7 @@ class CohortWarGame extends Forge2DGame {
 
       final int ei = int.parse(locked.substring(2));
       if (ei >= enemySoldiers.length || !_enemyAlive[ei]) {
-        _playerLockedEnemy[i] = detected != locked ? detected : null;
+        _playerLockedEnemy[i] = null;
         _playerAttackCycleT[i] = 0;
         _playerDamagedThisPhase[i].clear();
         _playerWasInAttackPhase[i] = false;
@@ -2351,9 +2556,9 @@ class _TargetEnemyIndicator extends Component {
 }
 
 class _TargetLockBurst extends Component {
-  _TargetLockBurst({required this.worldPos, required this.colors});
+  _TargetLockBurst({required this.positionGetter, required this.colors});
 
-  final Vector2 worldPos;
+  final Vector2 Function() positionGetter;
   final List<Color> colors;
 
   static const double _duration = 0.7;
@@ -2378,7 +2583,8 @@ class _TargetLockBurst extends Component {
   @override
   void render(Canvas canvas) {
     final double t = _t.clamp(0.0, 1.0);
-    final double ox = worldPos.x, oy = worldPos.y;
+    final Vector2 wp = positionGetter();
+    final double ox = wp.x, oy = wp.y;
     final Offset center = Offset(ox, oy);
 
     final double ease = Curves.easeInOutCubic.transform(t);

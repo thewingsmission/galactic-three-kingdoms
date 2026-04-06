@@ -9,8 +9,6 @@ import '../models/soldier_design_palette.dart';
 import '../models/soldier_faction_color_theme.dart';
 import '../widgets/virtual_joystick.dart';
 
-enum WarActionMode { attack, defense, target }
-
 class WarScreen extends StatefulWidget {
   const WarScreen({
     super.key,
@@ -44,6 +42,7 @@ class _WarScreenState extends State<WarScreen>
   void _selectMode(WarActionMode mode) {
     if (_actionMode == mode) return;
     setState(() => _actionMode = mode);
+    _game.setActionMode(mode);
     _glowCtrl.forward(from: 0);
   }
 
@@ -70,6 +69,7 @@ class _WarScreenState extends State<WarScreen>
   void _restart() {
     setState(() {
       _game = _createGame();
+      _game.setActionMode(WarActionMode.defense);
       _gameKey = UniqueKey();
       _actionMode = WarActionMode.defense;
     });
