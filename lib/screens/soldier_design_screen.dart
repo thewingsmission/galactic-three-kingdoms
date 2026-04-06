@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/soldier_design.dart';
 import '../models/soldier_design_palette.dart';
+import '../models/soldier_faction_color_theme.dart';
 import '../models/soldier_rarity.dart';
 import '../widgets/soldier_design_catalog.dart';
 import '../widgets/soldier_design_detail_dialog.dart';
@@ -10,7 +11,9 @@ import 'color_theme_screen.dart';
 
 /// Tabs: **Draft** → **Validated** → **Production**; detail popup (idle / attack / range disks).
 class SoldierDesignScreen extends StatefulWidget {
-  const SoldierDesignScreen({super.key});
+  const SoldierDesignScreen({super.key, this.initialPalette});
+
+  final SoldierDesignPalette? initialPalette;
 
   @override
   State<SoldierDesignScreen> createState() => _SoldierDesignScreenState();
@@ -33,12 +36,12 @@ class _SoldierDesignScreenState extends State<SoldierDesignScreen>
   /// 1-based draft indices marked for deletion.
   final Set<int> _markDelete = <int>{};
 
-  /// Preview / detail tint: **yellow** = authored catalog colors.
-  SoldierDesignPalette _palette = SoldierDesignPalette.yellow;
+  late SoldierDesignPalette _palette;
 
   @override
   void initState() {
     super.initState();
+    _palette = widget.initialPalette ?? SoldierDesignPalette.yellow;
     _validatedPool = List<SoldierDesign>.from(kValidatedSoldierDesignCatalog);
     _productionPool
       ..clear()
@@ -155,17 +158,30 @@ class _SoldierDesignScreenState extends State<SoldierDesignScreen>
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final List<Color> bgColors = switch (_palette) {
+      SoldierDesignPalette.yellow => const <Color>[
+        Color(0xFF0F0D08),
+        Color(0xFF2A2314),
+        Color(0xFF0C0B06),
+      ],
+      SoldierDesignPalette.red => const <Color>[
+        Color(0xFF0F0808),
+        Color(0xFF2A1414),
+        Color(0xFF0C0606),
+      ],
+      SoldierDesignPalette.blue => const <Color>[
+        Color(0xFF080B0F),
+        Color(0xFF141E2A),
+        Color(0xFF060A0C),
+      ],
+    };
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: <Color>[
-              Color(0xFF0F0D08),
-              Color(0xFF2A2314),
-              Color(0xFF0C0B06),
-            ],
+            colors: bgColors,
           ),
         ),
         child: SafeArea(
@@ -177,7 +193,7 @@ class _SoldierDesignScreenState extends State<SoldierDesignScreen>
                 child: Row(
                   children: <Widget>[
                     IconButton.filledTonal(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => Navigator.of(context).pop<SoldierDesignPalette>(_palette),
                       icon: const Icon(Icons.arrow_back),
                     ),
                     const SizedBox(width: 8),
@@ -651,7 +667,7 @@ class _SoldierDesignScreenState extends State<SoldierDesignScreen>
                   design: d,
                   rarity: r,
                   subtitle: '#$oneBased',
-                  borderColor: const Color(0xFF26C6DA).withValues(alpha: 0.75),
+                  borderColor: r.accentColor.withValues(alpha: 0.75),
                 ),
               );
             },

@@ -252,7 +252,9 @@ double _segDistSq(Vector2 a, Vector2 b, Vector2 p) {
 // Combat constants
 // ---------------------------------------------------------------------------
 
-const int kGildedBastionMaxHp = 5;
+const int kGildedBastionMaxHp = 100;
+const int kGildedBastionAttackDmg = 20;
+const double kKnockbackImpulse = 800.0;
 const double kAttackCycleSeconds = SoldierAttackSpec.kPreviewCycleSeconds;
 
 /// War scene: first deployed soldier **is** the cohort anchor (joystick, formation origin); other
@@ -1162,12 +1164,26 @@ class CohortWarGame extends Forge2DGame {
       }
       _playerWasInAttackPhase[i] = inAttack;
 
-      if (inAttack && !_playerDamagedThisPhase[i].contains(locked)) {
-        if (_enemyContactInPlayerAttackZone(i, locked)) {
-          _playerDamagedThisPhase[i].add(locked);
-          _enemyHp[ei] = (_enemyHp[ei] - 1).clamp(0, _enemyMaxHp[ei]);
-          if (_enemyHp[ei] <= 0) {
-            _killEnemy(ei);
+      if (inAttack) {
+        final Vector2 attackerPos = playerSoldierBodies[i].body.position;
+        for (int ej = 0; ej < enemySoldiers.length; ej++) {
+          if (!_enemyAlive[ej]) continue;
+          final String ek = 'e-$ej';
+          if (_playerDamagedThisPhase[i].contains(ek)) continue;
+          if (_enemyContactInPlayerAttackZone(i, ek)) {
+            _playerDamagedThisPhase[i].add(ek);
+            _enemyHp[ej] = (_enemyHp[ej] - kGildedBastionAttackDmg).clamp(0, _enemyMaxHp[ej]);
+            final Vector2 targetPos = enemySoldiers[ej].body.body.position;
+            final Vector2 dir = targetPos - attackerPos;
+            if (dir.length2 > 0.01) {
+              enemySoldiers[ej].body.body.applyLinearImpulse(
+                dir.normalized() * kKnockbackImpulse,
+              );
+            }
+            _spawnDamageText(targetPos, kGildedBastionAttackDmg, playerPalette);
+            if (_enemyHp[ej] <= 0) {
+              _killEnemy(ej);
+            }
           }
         }
       }
@@ -1226,19 +1242,42 @@ class CohortWarGame extends Forge2DGame {
       }
       _enemyWasInAttackPhase[ei] = inAttack;
 
-      if (inAttack && !_enemyDamagedThisPhase[ei].contains(locked)) {
-        if (locked.startsWith('p-')) {
-          if (_playerContactInEnemyAttackZone(ei, locked)) {
-            _enemyDamagedThisPhase[ei].add(locked);
-            final int pj = int.parse(locked.substring(2));
-            _playerHp[pj] = (_playerHp[pj] - 1).clamp(0, _playerMaxHp[pj]);
+      if (inAttack) {
+        final Vector2 attackerPos = enemySoldiers[ei].body.body.position;
+        final SoldierDesignPalette attackerPal = enemySoldiers[ei].palette;
+        for (int pj = 0; pj < playerCohort.soldierCount; pj++) {
+          if (!_playerAlive[pj]) continue;
+          final String pk = 'p-$pj';
+          if (_enemyDamagedThisPhase[ei].contains(pk)) continue;
+          if (_playerContactInEnemyAttackZone(ei, pk)) {
+            _enemyDamagedThisPhase[ei].add(pk);
+            _playerHp[pj] = (_playerHp[pj] - kGildedBastionAttackDmg).clamp(0, _playerMaxHp[pj]);
+            final Vector2 targetPos = playerSoldierBodies[pj].body.position;
+            final Vector2 dir = targetPos - attackerPos;
+            if (dir.length2 > 0.01) {
+              playerSoldierBodies[pj].body.applyLinearImpulse(
+                dir.normalized() * kKnockbackImpulse,
+              );
+            }
+            _spawnDamageText(targetPos, kGildedBastionAttackDmg, attackerPal);
             if (_playerHp[pj] <= 0) _killPlayer(pj);
           }
-        } else {
-          final int ej = int.parse(locked.substring(2));
+        }
+        for (int ej = 0; ej < enemySoldiers.length; ej++) {
+          if (ej == ei || !_enemyAlive[ej]) continue;
+          final String ek = 'e-$ej';
+          if (_enemyDamagedThisPhase[ei].contains(ek)) continue;
           if (_rivalContactInEnemyAttackZone(ei, ej)) {
-            _enemyDamagedThisPhase[ei].add(locked);
-            _enemyHp[ej] = (_enemyHp[ej] - 1).clamp(0, _enemyMaxHp[ej]);
+            _enemyDamagedThisPhase[ei].add(ek);
+            _enemyHp[ej] = (_enemyHp[ej] - kGildedBastionAttackDmg).clamp(0, _enemyMaxHp[ej]);
+            final Vector2 targetPos = enemySoldiers[ej].body.body.position;
+            final Vector2 dir = targetPos - attackerPos;
+            if (dir.length2 > 0.01) {
+              enemySoldiers[ej].body.body.applyLinearImpulse(
+                dir.normalized() * kKnockbackImpulse,
+              );
+            }
+            _spawnDamageText(targetPos, kGildedBastionAttackDmg, attackerPal);
             if (_enemyHp[ej] <= 0) _killEnemy(ej);
           }
         }
@@ -1286,6 +1325,14 @@ class CohortWarGame extends Forge2DGame {
       }
     }
   }
+
+  void _spawnDamageText(Vector2 worldPos, int amount, SoldierDesignPalette attackerPalette) {
+    world.add(_FloatingDamageText(
+      worldPos: worldPos.clone(),
+      amount: amount,
+      color: factionTierList(attackerPalette)[0],
+    ));
+  }
 }
 
 /// One enemy unit: a single [CohortSoldier] (visual + contact) and its Forge2D body.
@@ -1300,6 +1347,61 @@ class EnemySoldier {
   final CohortSoldier soldier;
   final SoldierContactBody body;
   final SoldierDesignPalette palette;
+}
+
+/// Floating damage number that drifts upward and fades out.
+class _FloatingDamageText extends Component {
+  _FloatingDamageText({
+    required this.worldPos,
+    required this.amount,
+    required this.color,
+  });
+
+  final Vector2 worldPos;
+  final int amount;
+  final Color color;
+
+  static const double _lifetime = 0.8;
+  static const double _riseSpeed = 40.0;
+  double _elapsed = 0;
+
+  @override
+  int get priority => 100;
+
+  @override
+  void update(double dt) {
+    _elapsed += dt;
+    worldPos.y -= _riseSpeed * dt;
+    if (_elapsed >= _lifetime) {
+      removeFromParent();
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final double t = (_elapsed / _lifetime).clamp(0.0, 1.0);
+    final double alpha = t < 0.6 ? 1.0 : 1.0 - ((t - 0.6) / 0.4);
+    final double scale = t < 0.1 ? 0.5 + 5.0 * t : 1.0;
+    final TextPainter tp = TextPainter(
+      text: TextSpan(
+        text: '$amount',
+        style: TextStyle(
+          color: color.withValues(alpha: alpha),
+          fontSize: 12 * scale,
+          fontWeight: FontWeight.w900,
+          shadows: <Shadow>[
+            Shadow(
+              color: Colors.black.withValues(alpha: alpha * 0.85),
+              blurRadius: 3,
+            ),
+          ],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, Offset(worldPos.x - tp.width / 2, worldPos.y - tp.height / 2));
+    tp.dispose();
+  }
 }
 
 /// Draws zone overlays per soldier following [soldier_structure.md] hierarchy:
@@ -1792,12 +1894,18 @@ class _WarHpBarLayer extends Component {
     final Rect bg = Rect.fromLTWH(left, top, _barWidth, _barHeight);
     canvas.drawRect(bg, _bgPaint);
 
+    final double ratio = (hp / maxHp).clamp(0.0, 1.0);
+    final double fillW = _barWidth * ratio;
     final double segW = _barWidth / _segments;
-    for (int s = 0; s < hp.clamp(0, _segments); s++) {
+    for (int s = 0; s < _segments; s++) {
+      final double segLeft = left + s * segW;
+      final double segRight = segLeft + segW;
+      if (segLeft >= left + fillW) break;
+      final double clippedW = (left + fillW - segLeft).clamp(0.0, segW);
       final int tierIndex = _segments - s;
       _segPaint.color = tierColors[tierIndex - 1];
       canvas.drawRect(
-        Rect.fromLTWH(left + s * segW, top, segW, _barHeight),
+        Rect.fromLTWH(segLeft, top, clippedW, _barHeight),
         _segPaint,
       );
     }

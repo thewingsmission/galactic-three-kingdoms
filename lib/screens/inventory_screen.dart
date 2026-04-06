@@ -301,46 +301,70 @@ class _InventoryScreenState extends State<InventoryScreen>
     );
   }
 
-  List<Widget> _buildPaletteChips() {
-    return SoldierDesignPalette.values.map((SoldierDesignPalette p) {
-      final bool active = p == _palette;
-      final Color color = factionTierList(p)[0];
-      return Padding(
-        padding: const EdgeInsets.only(left: 4),
-        child: GestureDetector(
-          onTap: () => setState(() => _palette = p),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: active ? color : color.withValues(alpha: 0.25),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: active ? Colors.white : Colors.white24,
-                width: active ? 2.5 : 1.25,
-              ),
-            ),
-          ),
+  Widget _buildPaletteSelector() {
+    return SegmentedButton<SoldierDesignPalette>(
+      style: SegmentedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+        minimumSize: const Size(24, 24),
+        maximumSize: const Size(36, 28),
+      ),
+      showSelectedIcon: false,
+      segments: const <ButtonSegment<SoldierDesignPalette>>[
+        ButtonSegment<SoldierDesignPalette>(
+          value: SoldierDesignPalette.red,
+          tooltip: 'Red',
+          icon: Icon(Icons.circle, size: 10, color: Color(0xFFE57373)),
         ),
-      );
-    }).toList();
+        ButtonSegment<SoldierDesignPalette>(
+          value: SoldierDesignPalette.yellow,
+          tooltip: 'Yellow',
+          icon: Icon(Icons.circle, size: 10, color: Color(0xFFFFC107)),
+        ),
+        ButtonSegment<SoldierDesignPalette>(
+          value: SoldierDesignPalette.blue,
+          tooltip: 'Blue',
+          icon: Icon(Icons.circle, size: 10, color: Color(0xFF64B5F6)),
+        ),
+      ],
+      selected: <SoldierDesignPalette>{_palette},
+      onSelectionChanged: (Set<SoldierDesignPalette> next) {
+        setState(() => _palette = next.first);
+      },
+      multiSelectionEnabled: false,
+    );
   }
+
+  static List<Color> _bgGradient(SoldierDesignPalette p) => switch (p) {
+        SoldierDesignPalette.yellow => const <Color>[
+          Color(0xFF0F0D08),
+          Color(0xFF2A2314),
+          Color(0xFF0C0B06),
+        ],
+        SoldierDesignPalette.red => const <Color>[
+          Color(0xFF0F0808),
+          Color(0xFF2A1414),
+          Color(0xFF0C0606),
+        ],
+        SoldierDesignPalette.blue => const <Color>[
+          Color(0xFF080B0F),
+          Color(0xFF141E2A),
+          Color(0xFF060A0C),
+        ],
+      };
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
+    final Color paletteAccent = factionTierList(_palette)[0];
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: const <Color>[
-              Color(0xFF0F0D08),
-              Color(0xFF2A2314),
-              Color(0xFF0C0B06),
-            ],
+            colors: _bgGradient(_palette),
           ),
         ),
         child: SafeArea(
@@ -363,7 +387,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                                 ),
                           ),
                           const Spacer(),
-                          ..._buildPaletteChips(),
+                          _buildPaletteSelector(),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -392,31 +416,35 @@ class _InventoryScreenState extends State<InventoryScreen>
                         children: <Widget>[
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () {
-                                Navigator.of(context).push<void>(
-                                  MaterialPageRoute<void>(
+                              onPressed: () async {
+                                final SoldierDesignPalette? result =
+                                    await Navigator.of(context).push<SoldierDesignPalette>(
+                                  MaterialPageRoute<SoldierDesignPalette>(
                                     builder: (BuildContext context) =>
-                                        const SoldierDesignScreen(),
+                                        SoldierDesignScreen(initialPalette: _palette),
                                   ),
                                 );
+                                if (result != null && result != _palette) {
+                                  setState(() => _palette = result);
+                                }
                               },
                               icon: Icon(
                                 Icons.category_outlined,
                                 size: 18,
-                                color: cs.primary,
+                                color: paletteAccent,
                               ),
                               label: Text(
                                 'Designs',
                                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                      color: cs.primary,
+                                      color: paletteAccent,
                                       fontWeight: FontWeight.w600,
                                       fontSize: 13,
                                     ),
                               ),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: cs.primary,
+                                foregroundColor: paletteAccent,
                                 side: BorderSide(
-                                  color: cs.primary.withValues(alpha: 0.55),
+                                  color: paletteAccent.withValues(alpha: 0.55),
                                 ),
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 8,
@@ -469,7 +497,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                       color: Colors.black.withValues(alpha: 0.28),
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                        color: cs.primary.withValues(alpha: 0.42),
+                        color: paletteAccent.withValues(alpha: 0.42),
                       ),
                     ),
                     child: ClipRRect(

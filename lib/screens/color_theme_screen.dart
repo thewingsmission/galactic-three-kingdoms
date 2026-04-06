@@ -66,16 +66,6 @@ class ColorThemeScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'Fifteen component colors (5 per faction), dark → light by row; index **1–5**. '
-                  'Yellow and blue match the red ladder in **HSL** (saturation & lightness per tier; '
-                  'hue from the old tier-3 yellow `#FCD87E` and blue `#66ACF1`). '
-                  'Source: soldier_faction_color_theme.dart.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
-                ),
-              ),
               const SizedBox(height: 16),
               Expanded(
                 child: Center(
