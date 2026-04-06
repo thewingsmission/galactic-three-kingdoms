@@ -369,8 +369,40 @@ class CohortWarGame extends Forge2DGame {
   late List<bool> _enemyAlive;
   late List<double> _enemyKnockbackTimer;
 
+  int? _targetEnemyIndex;
+
   void setStick(Offset normalized) {
     stick.setValues(normalized.dx, normalized.dy);
+  }
+
+  /// Called from the UI layer when the user taps the game area.
+  /// [screenPos] is in screen-logical coordinates.
+  void handleScreenTap(Offset screenPos) {
+    if (gameOver.value) return;
+    if (_playerCohortMoving()) return;
+    final Vector2 world = screenToWorld(Vector2(screenPos.dx, screenPos.dy));
+    _trySelectTargetEnemy(world);
+  }
+
+  void _trySelectTargetEnemy(Vector2 worldTap) {
+    for (int ei = enemySoldiers.length - 1; ei >= 0; ei--) {
+      if (!_enemyAlive[ei]) continue;
+      final CohortSoldier es = enemySoldiers[ei].soldier;
+      final Vector2 ePos = enemySoldiers[ei].body.body.position;
+      final double eAngle = _lastEnemySoldierFacing[ei];
+      final List<Vector2>? verts =
+          contactZoneWorldVerts(es.contact, ePos, eAngle);
+      bool hit;
+      if (verts != null && verts.length >= 3) {
+        hit = _pointInConvexPoly(worldTap, verts);
+      } else {
+        hit = (worldTap - ePos).length2 <= es.contact.radius * es.contact.radius;
+      }
+      if (hit) {
+        _targetEnemyIndex = ei;
+        return;
+      }
+    }
   }
 
   int get soldierCount => _deployment.soldiers.length;
@@ -504,6 +536,12 @@ class CohortWarGame extends Forge2DGame {
       playerMaxHp: () => _playerMaxHp,
       enemyHp: () => _enemyHp,
       enemyMaxHp: () => _enemyMaxHp,
+    ));
+    await world.add(_TargetEnemyIndicator(
+      targetIndex: () => _targetEnemyIndex,
+      enemyPosition: (int i) => enemySoldiers[i].body.body.position,
+      enemyPaintSize: (int i) => enemySoldiers[i].soldier.model.paintSize,
+      enemyPalette: (int i) => enemySoldiers[i].palette,
     ));
 
     camera.follow(playerSoldierBodies[_leaderIndex], snap: true, maxSpeed: double.infinity);
@@ -1107,6 +1145,15 @@ class CohortWarGame extends Forge2DGame {
   @override
   void update(double dt) {
     if (gameOver.value) return;
+
+    // Clear target enemy when joystick is active or target is dead.
+    if (_targetEnemyIndex != null) {
+      if (_playerCohortMoving() ||
+          !_enemyAlive[_targetEnemyIndex!]) {
+        _targetEnemyIndex = null;
+      }
+    }
+
     _tickKnockbackTimers(dt);
     _snapshotVelocitiesBeforeStep();
     _steer();
@@ -2170,5 +2217,60 @@ class _WarHpBarLayer extends Component {
           pal != null ? factionTierList(pal) : kRedFactionComponentColors;
       _drawBar(canvas, enemy.position(i), eHp[i], eMax[i], colors);
     }
+  }
+}
+
+class _TargetEnemyIndicator extends Component {
+  _TargetEnemyIndicator({
+    required this.targetIndex,
+    required this.enemyPosition,
+    required this.enemyPaintSize,
+    required this.enemyPalette,
+  });
+
+  final int? Function() targetIndex;
+  final Vector2 Function(int index) enemyPosition;
+  final double Function(int index) enemyPaintSize;
+  final SoldierDesignPalette Function(int index) enemyPalette;
+
+  static const double _triHalfW = 5.6;
+  static const double _triH = 16;
+  static const double _gapAboveSoldier = 11.4;
+  static const double _bobAmplitude = 4;
+  static const double _bobCycleSec = 0.8;
+
+  double _t = 0;
+
+  @override
+  int get priority => 30;
+
+  @override
+  void update(double dt) {
+    _t = (_t + dt / _bobCycleSec) % 1.0;
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final int? idx = targetIndex();
+    if (idx == null) return;
+    final Vector2 pos = enemyPosition(idx);
+    final double halfSize = enemyPaintSize(idx) / 2;
+    final double bobOffset =
+        math.sin(_t * 2 * math.pi) * _bobAmplitude;
+    final double tipY = pos.y - (halfSize + _gapAboveSoldier) * 1.3 + bobOffset;
+    final List<Color> tier = factionTierList(enemyPalette(idx));
+    final Paint fill = Paint()..color = tier[2];
+    final Paint stroke = Paint()
+      ..color = tier[4]
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final Path tri = Path()
+      ..moveTo(pos.x, tipY + _triH)
+      ..lineTo(pos.x - _triHalfW, tipY)
+      ..lineTo(pos.x + _triHalfW, tipY)
+      ..close();
+    canvas.drawPath(tri, fill);
+    canvas.drawPath(tri, stroke);
   }
 }

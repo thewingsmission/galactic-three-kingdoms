@@ -65,7 +65,12 @@ class _WarScreenState extends State<WarScreen> {
         fit: StackFit.expand,
         clipBehavior: Clip.none,
         children: <Widget>[
-          GameWidget<CohortWarGame>(key: _gameKey, game: _game),
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTapUp: (TapUpDetails details) =>
+                _game.handleScreenTap(details.localPosition),
+            child: GameWidget<CohortWarGame>(key: _gameKey, game: _game),
+          ),
           Positioned(
             left: 20,
             top: 16,
