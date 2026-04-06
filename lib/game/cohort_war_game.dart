@@ -150,69 +150,67 @@ List<Vector2>? targetZoneWorldVerts(SoldierContact contact, Vector2 bodyPos, dou
   }).toList();
 }
 
-/// Engagement zone vertices transformed to world space.
-List<Vector2>? engagementZoneWorldVerts(SoldierContact contact, Vector2 bodyPos, double angle) {
-  if (!contact.hasEngagement) return null;
-  final double c = math.cos(angle);
-  final double sn = math.sin(angle);
-  return contact.engagementHullVertices!.map((Offset o) {
-    return Vector2(
-      bodyPos.x + c * o.dx - sn * o.dy,
-      bodyPos.y + sn * o.dx + c * o.dy,
-    );
-  }).toList();
-}
-
-/// SAT overlap test for two convex polygons.
-bool _convexPolysOverlap(List<Vector2> a, List<Vector2> b) {
-  bool separated(List<Vector2> poly, List<Vector2> other) {
-    for (int i = 0; i < poly.length; i++) {
-      final int j = (i + 1) % poly.length;
-      final double nx = poly[j].y - poly[i].y;
-      final double ny = poly[i].x - poly[j].x;
-      double minA = double.infinity, maxA = double.negativeInfinity;
-      for (final Vector2 v in poly) {
-        final double d = v.x * nx + v.y * ny;
-        if (d < minA) minA = d;
-        if (d > maxA) maxA = d;
-      }
-      double minB = double.infinity, maxB = double.negativeInfinity;
-      for (final Vector2 v in other) {
-        final double d = v.x * nx + v.y * ny;
-        if (d < minB) minB = d;
-        if (d > maxB) maxB = d;
-      }
-      if (maxA < minB || maxB < minA) return true;
-    }
-    return false;
-  }
-  return !separated(a, b) && !separated(b, a);
-}
-
-/// True when a contact zone (polygon or circle) overlaps an engagement zone polygon.
-bool contactOverlapsEngagementPoly({
+/// True when a contact zone (polygon or circle) overlaps an engagement
+/// annulus centered at [engCenter] with [innerR]..[outerR].
+bool contactOverlapsEngagementAnnulus({
   required SoldierContact contact,
   required Vector2 contactBodyPos,
   required double contactAngle,
-  required List<Vector2> engagementWorldVerts,
+  required Vector2 engCenter,
+  required double innerR,
+  required double outerR,
 }) {
-  final List<Vector2>? cVerts = contactZoneWorldVerts(contact, contactBodyPos, contactAngle);
+  final List<Vector2>? cVerts =
+      contactZoneWorldVerts(contact, contactBodyPos, contactAngle);
   if (cVerts != null && cVerts.length >= 3) {
-    return _convexPolysOverlap(cVerts, engagementWorldVerts);
+    return _polyOverlapsAnnulus(cVerts, engCenter, innerR, outerR);
   }
-  // Circle fallback: check if circle overlaps convex polygon
-  final double r = contact.radius;
-  final double r2 = r * r;
-  for (final Vector2 v in engagementWorldVerts) {
-    if ((v - contactBodyPos).length2 <= r2) return true;
+  return _circleOverlapsAnnulus(
+    contactBodyPos, contact.radius, engCenter, innerR, outerR,
+  );
+}
+
+bool _polyOverlapsAnnulus(
+  List<Vector2> poly, Vector2 center, double innerR, double outerR,
+) {
+  bool anyInside = false;
+  bool anyOutsideOuter = false;
+  bool anyInsideInner = false;
+  for (final Vector2 v in poly) {
+    final double d2 = (v - center).length2;
+    if (d2 <= outerR * outerR && d2 >= innerR * innerR) return true;
+    if (d2 > outerR * outerR) anyOutsideOuter = true;
+    if (d2 < innerR * innerR) anyInsideInner = true;
+    if (d2 <= outerR * outerR) anyInside = true;
   }
-  if (_pointInConvexPoly(contactBodyPos, engagementWorldVerts)) return true;
-  for (int i = 0; i < engagementWorldVerts.length; i++) {
-    final Vector2 a = engagementWorldVerts[i];
-    final Vector2 b = engagementWorldVerts[(i + 1) % engagementWorldVerts.length];
-    if (_segDistSq(a, b, contactBodyPos) <= r2) return true;
+  if (anyInsideInner && anyOutsideOuter) return true;
+  if (anyInsideInner && anyInside) return true;
+  if (anyOutsideOuter && anyInside) return true;
+
+  for (int i = 0; i < poly.length; i++) {
+    final Vector2 a = poly[i];
+    final Vector2 b = poly[(i + 1) % poly.length];
+    if (_segIntersectsCircle(a, b, center, outerR) ||
+        _segIntersectsCircle(a, b, center, innerR)) {
+      return true;
+    }
   }
   return false;
+}
+
+bool _circleOverlapsAnnulus(
+  Vector2 circleCenter, double circleR,
+  Vector2 annulusCenter, double innerR, double outerR,
+) {
+  final double dist = (circleCenter - annulusCenter).length;
+  if (dist + circleR < innerR) return false;
+  if (dist - circleR > outerR) return false;
+  return true;
+}
+
+bool _segIntersectsCircle(Vector2 a, Vector2 b, Vector2 c, double r) {
+  final double d2 = _segDistSq(a, b, c);
+  return d2 <= r * r;
 }
 
 /// True when a contact zone (polygon or circle) overlaps an attack zone circle.
@@ -799,19 +797,17 @@ class CohortWarGame extends Forge2DGame {
   bool _rivalContactInEnemyEngagementZone(int attackerEi, int targetEj) {
     final CohortSoldier attacker = enemySoldiers[attackerEi].soldier;
     final Vector2 aPos = enemySoldiers[attackerEi].body.body.position;
-    final double aAngle = _lastEnemySoldierFacing[attackerEi];
     if (!attacker.contact.hasEngagement) return false;
-    final List<Vector2>? engVerts =
-        engagementZoneWorldVerts(attacker.contact, aPos, aAngle);
-    if (engVerts == null) return false;
     final CohortSoldier target = enemySoldiers[targetEj].soldier;
     final Vector2 tPos = enemySoldiers[targetEj].body.body.position;
     final double tAngle = _lastEnemySoldierFacing[targetEj];
-    return contactOverlapsEngagementPoly(
+    return contactOverlapsEngagementAnnulus(
       contact: target.contact,
       contactBodyPos: tPos,
       contactAngle: tAngle,
-      engagementWorldVerts: engVerts,
+      engCenter: aPos,
+      innerR: attacker.contact.engagementInnerRadius!,
+      outerR: attacker.contact.engagementOuterRadius!,
     );
   }
 
@@ -880,20 +876,19 @@ class CohortWarGame extends Forge2DGame {
     final int ei = int.parse(enemyKey.substring(2));
     final CohortSoldier ps = playerCohort.soldier(playerIndex);
     final Vector2 pPos = playerSoldierBodies[playerIndex].body.position;
-    final double pAngle = _lastPlayerFacing[playerIndex];
-    final List<Vector2>? engVerts =
-        engagementZoneWorldVerts(ps.contact, pPos, pAngle);
-    if (engVerts == null || engVerts.length < 3) {
+    if (!ps.contact.hasEngagement) {
       return _enemyContactInPlayerAttackZone(playerIndex, enemyKey);
     }
     final CohortSoldier es = enemySoldiers[ei].soldier;
     final Vector2 ePos = enemySoldiers[ei].body.body.position;
     final double eAngle = _lastEnemySoldierFacing[ei];
-    return contactOverlapsEngagementPoly(
+    return contactOverlapsEngagementAnnulus(
       contact: es.contact,
       contactBodyPos: ePos,
       contactAngle: eAngle,
-      engagementWorldVerts: engVerts,
+      engCenter: pPos,
+      innerR: ps.contact.engagementInnerRadius!,
+      outerR: ps.contact.engagementOuterRadius!,
     );
   }
 
@@ -901,20 +896,19 @@ class CohortWarGame extends Forge2DGame {
     final int pj = int.parse(playerKey.substring(2));
     final CohortSoldier es = enemySoldiers[enemyIndex].soldier;
     final Vector2 ePos = enemySoldiers[enemyIndex].body.body.position;
-    final double eAngle = _lastEnemySoldierFacing[enemyIndex];
-    final List<Vector2>? engVerts =
-        engagementZoneWorldVerts(es.contact, ePos, eAngle);
-    if (engVerts == null || engVerts.length < 3) {
+    if (!es.contact.hasEngagement) {
       return _playerContactInEnemyAttackZone(enemyIndex, playerKey);
     }
     final CohortSoldier ps = playerCohort.soldier(pj);
     final Vector2 pPos = playerSoldierBodies[pj].body.position;
     final double pAngle = _lastPlayerFacing[pj];
-    return contactOverlapsEngagementPoly(
+    return contactOverlapsEngagementAnnulus(
       contact: ps.contact,
       contactBodyPos: pPos,
       contactAngle: pAngle,
-      engagementWorldVerts: engVerts,
+      engCenter: ePos,
+      innerR: es.contact.engagementInnerRadius!,
+      outerR: es.contact.engagementOuterRadius!,
     );
   }
 
@@ -957,9 +951,10 @@ class CohortWarGame extends Forge2DGame {
   }
 
   double _playerNeutralFacingAttack(int i, Vector2 p) {
-    final String? ed = _earliestEnemyInDetectionForPlayer(i);
-    if (ed != null) {
-      final Vector2 d = _enemyWorldPosFromKey(ed) - p;
+    final String? ea = _earliestEnemyInEngagementForPlayer(i);
+    final String? target = ea ?? _earliestEnemyInDetectionForPlayer(i);
+    if (target != null) {
+      final Vector2 d = _enemyWorldPosFromKey(target) - p;
       return d.length2 < 1e-12 ? _lastPlayerFacing[i] : _aimAngleToward(d);
     }
     return _lastPlayerFacing[i];
@@ -1118,12 +1113,13 @@ class CohortWarGame extends Forge2DGame {
   }
 
   void _applyPlayerChaseAttackMode(int i) {
-    final String? ed = _earliestEnemyInDetectionForPlayer(i);
-    if (ed == null) return;
-    if (_enemyContactInPlayerEngagementZone(i, ed)) {
+    final String? ea = _earliestEnemyInEngagementForPlayer(i);
+    if (ea != null) {
       playerSoldierBodies[i].body.linearVelocity.setZero();
       return;
     }
+    final String? ed = _earliestEnemyInDetectionForPlayer(i);
+    if (ed == null) return;
     _applyChaseVelocityToward(
       playerSoldierBodies[i].body,
       _enemyWorldPosFromKey(ed),
@@ -1386,7 +1382,8 @@ class CohortWarGame extends Forge2DGame {
   String? _playerCombatLockTarget(int i) {
     switch (_actionMode) {
       case WarActionMode.attack:
-        return _earliestEnemyInDetectionForPlayer(i);
+        return _earliestEnemyInEngagementForPlayer(i) ??
+            _earliestEnemyInDetectionForPlayer(i);
       case WarActionMode.defense:
         return _playerDefenseLockTarget(i);
       case WarActionMode.target:
@@ -2005,19 +2002,14 @@ class _WarEngagementZoneLayer extends Component {
 
   static void _paint(Canvas canvas, CohortSoldier s, Vector2 pos, double angle) {
     if (!s.contact.hasEngagement) return;
-    final List<Vector2>? verts =
-        engagementZoneWorldVerts(s.contact, pos, angle);
-    if (verts == null || verts.length < 3) return;
-    final Path path = Path();
-    for (int i = 0; i < verts.length; i++) {
-      if (i == 0) {
-        path.moveTo(verts[i].x, verts[i].y);
-      } else {
-        path.lineTo(verts[i].x, verts[i].y);
-      }
-    }
-    path.close();
-    canvas.drawPath(path, _stroke);
+    final double innerR = s.contact.engagementInnerRadius!;
+    final double outerR = s.contact.engagementOuterRadius!;
+    canvas.drawCircle(
+      Offset(pos.x, pos.y), outerR, _stroke,
+    );
+    canvas.drawCircle(
+      Offset(pos.x, pos.y), innerR, _stroke,
+    );
   }
 
   @override

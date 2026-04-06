@@ -41,7 +41,8 @@ class SoldierContact {
     required this.radius,
     this.hullVertices,
     this.targetHullVertices,
-    this.engagementHullVertices,
+    this.engagementInnerRadius,
+    this.engagementOuterRadius,
   });
 
   /// Circle fallback: radius = 27% of short side.
@@ -99,18 +100,23 @@ class SoldierContact {
       break;
     }
 
-    List<Offset>? engScaled;
+    double? engInnerR;
+    double? engOuterR;
+    final Offset hub = design.rangePlotHubModel ?? anchor;
     for (final SoldierShapePart p in design.parts) {
       if (p.stackRole != SoldierPartStackRole.engagement) continue;
       final List<Offset>? hull =
           MultiPolygonSoldierPainter.transformedFillVertices(p, 0.25, null);
       if (hull == null || hull.length < 3) continue;
-      engScaled = <Offset>[];
+      double minDist = double.infinity;
+      double maxDist = 0;
       for (final Offset v in hull) {
-        final double wx = (v.dx - anchor.dx) * fit;
-        final double wy = (v.dy - anchor.dy) * fit;
-        engScaled.add(Offset(wx, wy));
+        final double d = (v - hub).distance * fit;
+        if (d < minDist) minDist = d;
+        if (d > maxDist) maxDist = d;
       }
+      engInnerR = minDist;
+      engOuterR = maxDist;
       break;
     }
 
@@ -119,7 +125,8 @@ class SoldierContact {
         radius: maxR,
         hullVertices: contactScaled,
         targetHullVertices: targetScaled,
-        engagementHullVertices: engScaled,
+        engagementInnerRadius: engInnerR,
+        engagementOuterRadius: engOuterR,
       );
     }
 
@@ -137,14 +144,17 @@ class SoldierContact {
   /// Target zone polygon in **body-local** space — contact hull × 1.5. Null when not defined.
   final List<Offset>? targetHullVertices;
 
-  /// Engagement zone polygon in **body-local** space. Null when not defined.
-  final List<Offset>? engagementHullVertices;
+  /// Engagement zone annulus inner radius in **body-local** (world) units.
+  final double? engagementInnerRadius;
+
+  /// Engagement zone annulus outer radius in **body-local** (world) units.
+  final double? engagementOuterRadius;
 
   bool get hasPolygon => hullVertices != null && hullVertices!.length >= 3;
   bool get hasTarget =>
       targetHullVertices != null && targetHullVertices!.length >= 3;
   bool get hasEngagement =>
-      engagementHullVertices != null && engagementHullVertices!.length >= 3;
+      engagementInnerRadius != null && engagementOuterRadius != null;
 }
 
 /// Middle layer: sole owner of motion relative to the cohort; [model] / [contact] fixed in this frame.

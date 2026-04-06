@@ -294,29 +294,30 @@ class SoldierRangeRingsPainter extends CustomPainter {
       break;
     }
 
-    // --- Engagement zone polygon ---
+    // --- Engagement zone annulus (two circles centered on hub) ---
     for (final SoldierShapePart p in parts) {
       if (p.stackRole != SoldierPartStackRole.engagement) continue;
       final List<Offset>? ev =
           MultiPolygonSoldierPainter.transformedFillVertices(p, motionT, attackT);
       if (ev == null || ev.length < 3) continue;
-      final Path engPath = Path();
-      final Offset e0 = toScreen(ev.first);
-      engPath.moveTo(e0.dx, e0.dy);
-      for (int i = 1; i < ev.length; i++) {
-        final Offset es = toScreen(ev[i]);
-        engPath.lineTo(es.dx, es.dy);
+      final Offset hubModel = detailRangePlotHubModel ?? Offset(bx, by);
+      double minDist = double.infinity;
+      double maxDist = 0;
+      for (final Offset v in ev) {
+        final double d = (v - hubModel).distance;
+        if (d < minDist) minDist = d;
+        if (d > maxDist) maxDist = d;
       }
-      engPath.close();
+      final Offset hubScr = toScreen(hubModel);
+      final double innerPx = minDist * sigma;
+      final double outerPx = maxDist * sigma;
       final double engStroke = math.max(1.5, conStroke * 0.75);
-      canvas.drawPath(
-        engPath,
-        Paint()
-          ..color = const Color(0xFF2E7D32).withValues(alpha: 0.88)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = engStroke
-          ..strokeJoin = StrokeJoin.round,
-      );
+      final Paint engPaint = Paint()
+        ..color = const Color(0xFF9C27B0).withValues(alpha: 0.85)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = engStroke;
+      canvas.drawCircle(hubScr, outerPx, engPaint);
+      canvas.drawCircle(hubScr, innerPx, engPaint);
       break;
     }
 
@@ -417,7 +418,7 @@ class SoldierRangeRingsPainter extends CustomPainter {
     canvas.drawCircle(
       hubScreen,
       dotR,
-      Paint()..color = const Color(0xFF14532D).withValues(alpha: 0.98),
+      Paint()..color = const Color(0xFFE91E63).withValues(alpha: 0.98),
     );
   }
 
