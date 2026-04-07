@@ -1708,7 +1708,7 @@ List<SoldierDesign> _generateProceduralSoldiers() {
             alpha: 0.92,
           ),
         ]),
-        rarity: SoldierRarity.uncommon,
+        rarity: SoldierRarity.rare,
         attack: SoldierAttackSpec(mode: mode, label: attackLabel(mode)),
       ),
     );
@@ -1923,9 +1923,9 @@ final List<SoldierDesign> kValidatedSoldierDesignCatalog =
     List<SoldierDesign>.unmodifiable(_legacyPromotedAsLegendary());
 
 final SoldierDesign _kProductionGildedBastion = SoldierDesign(
-  id: 'gilded_bastion_prod',
-  name: 'Gilded Bastion',
-  rarity: _kLegendaryCastleCat.rarity,
+  id: 'helm_tower_prod',
+  name: 'Helm Tower',
+  rarity: SoldierRarity.epic,
   rangePlotHubModel: _kLegendaryCastleCat.rangePlotHubModel,
   crownVfxMode: CrownVfxMode.scalingCrown,
   parts: _kLegendaryCastleCat.parts,
@@ -2086,9 +2086,9 @@ List<SoldierShapePart> _emberSigilProdParts() {
 }
 
 final SoldierDesign _kProductionEmberSigil = SoldierDesign(
-  id: 'ember_sigil_prod',
-  name: 'Ember Sigil',
-  rarity: _kRadialLegendaryDrafts[5].rarity,
+  id: 'starry_hex_prod',
+  name: 'Starry Hex',
+  rarity: SoldierRarity.epic,
   rangePlotHubModel: Offset.zero,
   crownVfxMode: CrownVfxMode.none,
   parts: _emberSigilProdParts(),
