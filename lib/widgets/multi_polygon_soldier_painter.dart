@@ -31,7 +31,7 @@ class MultiPolygonSoldierPainter extends CustomPainter {
   static const double kOutlineThicknessMul = 0.5;
 
   /// Punch distance in model units for [CrownVfxMode.punchBurst].
-  static const double kPunchDistance = 50.0;
+  static const double kPunchDistance = 30.0;
 
   /// Cycle phase where [attackProbeEnvelope] is at full extension — use for layout / bbox so the
   /// attack strip does not clip during the probe hold.
@@ -766,13 +766,17 @@ class MultiPolygonSoldierPainter extends CustomPainter {
       strokeX.add(_transformVerts(p, p.strokePolyline, motionT, attackCycleT));
     }
 
-    // Punch: translate all attack-role parts along −Y during the attack cycle.
+    // Punch: translate attack + hitZone parts along −Y during the attack cycle.
     if (crownVfxMode == CrownVfxMode.punchBurst && attackCycleT != null) {
       final double punchEnv = attackProbeEnvelope(attackCycleT!);
       final double punchDy = -kPunchDistance * punchEnv;
       if (punchDy.abs() > 1e-6) {
         for (int i = 0; i < parts.length; i++) {
-          if (parts[i].stackRole != SoldierPartStackRole.attack) continue;
+          final SoldierPartStackRole role = parts[i].stackRole;
+          if (role != SoldierPartStackRole.attack &&
+              role != SoldierPartStackRole.hitZone) {
+            continue;
+          }
           if (fillX[i] != null) {
             fillX[i] = fillX[i]!
                 .map((Offset v) => Offset(v.dx, v.dy + punchDy))

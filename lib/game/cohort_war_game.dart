@@ -38,9 +38,9 @@ double soldierDetectionRadiusWorld(CohortSoldier s) {
 }
 
 /// Build a [SoldierContactBody] from a [SoldierContact]:
-/// polygon hull when available, circle fallback otherwise.
+/// polygon hull when available (≤8 verts), circle fallback otherwise.
 SoldierContactBody _bodyFromContact(SoldierContact c, Vector2 position) {
-  if (c.hasPolygon) {
+  if (c.hasPolygon && c.hullVertices!.length <= 8) {
     final List<Vector2> verts = c.hullVertices!
         .map((Offset o) => Vector2(o.dx, o.dy))
         .toList();

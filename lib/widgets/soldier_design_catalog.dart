@@ -2137,32 +2137,32 @@ final SoldierDesign _kProductionBoxGrin = SoldierDesign(
   rarity: SoldierRarity.common,
   crownVfxMode: CrownVfxMode.punchBurst,
   parts: <SoldierShapePart>[
-    ..._scalePartsToWidth(_boxGrinProdParts(), 60),
+    ..._scalePartsToWidth(_boxGrinProdParts(), 36),
     SoldierShapePart(
       fillVertices: const <Offset>[
-        Offset(-25.5, -25.5), Offset(25.5, -25.5),
-        Offset(25.5, 25.5), Offset(-25.5, 25.5),
+        Offset(-15.3, -15.3), Offset(15.3, -15.3),
+        Offset(15.3, 15.3), Offset(-15.3, 15.3),
       ],
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.contact,
     ),
     SoldierShapePart(
       fillVertices: const <Offset>[
-        Offset(-36.975, -36.975), Offset(36.975, -36.975),
-        Offset(36.975, 36.975), Offset(-36.975, 36.975),
+        Offset(-22.185, -22.185), Offset(22.185, -22.185),
+        Offset(22.185, 22.185), Offset(-22.185, 22.185),
       ],
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.target,
     ),
     SoldierShapePart(
-      fillVertices: _engagementAnnulusVerts(35, 70.4),
+      fillVertices: _engagementAnnulusVerts(21, 42.24),
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.engagement,
     ),
     SoldierShapePart(
       fillVertices: const <Offset>[
-        Offset(-33, -33), Offset(33, -33),
-        Offset(33, 33), Offset(-33, 33),
+        Offset(-19.8, -19.8), Offset(19.8, -19.8),
+        Offset(19.8, 19.8), Offset(-19.8, 19.8),
       ],
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.hitZone,
@@ -2226,29 +2226,29 @@ final SoldierDesign _kProductionTriFury = SoldierDesign(
   rarity: SoldierRarity.common,
   crownVfxMode: CrownVfxMode.punchBurst,
   parts: <SoldierShapePart>[
-    ..._scalePartsToWidth(_triFuryProdParts(), 60),
+    ..._scalePartsToWidth(_triFuryProdParts(), 36),
     SoldierShapePart(
       fillVertices: const <Offset>[
-        Offset(0, -29.445), Offset(25.5, 14.723), Offset(-25.5, 14.723),
+        Offset(0, -17.667), Offset(15.3, 8.834), Offset(-15.3, 8.834),
       ],
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.contact,
     ),
     SoldierShapePart(
       fillVertices: const <Offset>[
-        Offset(0, -42.695), Offset(36.975, 21.348), Offset(-36.975, 21.348),
+        Offset(0, -25.617), Offset(22.185, 12.809), Offset(-22.185, 12.809),
       ],
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.target,
     ),
     SoldierShapePart(
-      fillVertices: _engagementAnnulusVerts(35, 70.4),
+      fillVertices: _engagementAnnulusVerts(21, 35.904),
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.engagement,
     ),
     SoldierShapePart(
       fillVertices: const <Offset>[
-        Offset(0, -38.105), Offset(33, 19.053), Offset(-33, 19.053),
+        Offset(0, -22.863), Offset(19.8, 11.432), Offset(-19.8, 11.432),
       ],
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.hitZone,
@@ -2316,24 +2316,24 @@ final SoldierDesign _kProductionOrbJoy = SoldierDesign(
   rarity: SoldierRarity.common,
   crownVfxMode: CrownVfxMode.punchBurst,
   parts: <SoldierShapePart>[
-    ..._scalePartsToWidth(_orbJoyProdParts(), 60),
+    ..._scalePartsToWidth(_orbJoyProdParts(), 36),
     SoldierShapePart(
-      fillVertices: _circleVerts(25.5, 8),
+      fillVertices: _circleVerts(15.3, 20),
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.contact,
     ),
     SoldierShapePart(
-      fillVertices: _circleVerts(36.975, 8),
+      fillVertices: _circleVerts(22.185, 20),
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.target,
     ),
     SoldierShapePart(
-      fillVertices: _engagementAnnulusVerts(35, 70.4),
+      fillVertices: _engagementAnnulusVerts(21, 42.24),
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.engagement,
     ),
     SoldierShapePart(
-      fillVertices: _circleVerts(33, 8),
+      fillVertices: _circleVerts(19.8, 20),
       fillTier: 1, transparentFill: true, strokeWidth: 0,
       stackRole: SoldierPartStackRole.hitZone,
     ),

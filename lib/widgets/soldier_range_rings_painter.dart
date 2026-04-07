@@ -323,11 +323,19 @@ class SoldierRangeRingsPainter extends CustomPainter {
     }
 
     // --- Hit zone polygons ---
+    final double hitPunchDy =
+        crownVfxMode == CrownVfxMode.punchBurst
+            ? -MultiPolygonSoldierPainter.kPunchDistance *
+                MultiPolygonSoldierPainter.attackProbeEnvelope(attackT)
+            : 0.0;
     for (final SoldierShapePart p in parts) {
       if (p.stackRole != SoldierPartStackRole.hitZone) continue;
-      final List<Offset>? hv =
+      List<Offset>? hv =
           MultiPolygonSoldierPainter.transformedFillVertices(p, motionT, attackT);
       if (hv == null || hv.length < 3) continue;
+      if (hitPunchDy.abs() > 1e-6) {
+        hv = hv.map((Offset v) => Offset(v.dx, v.dy + hitPunchDy)).toList();
+      }
       final Path hitPath = Path();
       final Offset h0 = toScreen(hv.first);
       hitPath.moveTo(h0.dx, h0.dy);
