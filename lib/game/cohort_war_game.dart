@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
 import 'package:flame/extensions.dart';
@@ -637,6 +638,7 @@ class CohortWarGame extends Forge2DGame {
         attackCycleForSoldier: (int i) =>
             _playerLockedEnemy[i] != null ? _playerAttackCycleT[i] : null,
         isAlive: (int i) => _playerAlive[i],
+        playerPalette: playerPalette,
       ),
     );
 
@@ -2676,6 +2678,7 @@ class PlayerFormationPainter extends Component {
     required this.visualAngleForSoldier,
     required this.attackCycleForSoldier,
     required this.isAlive,
+    required this.playerPalette,
   });
 
   final CohortRuntime runtime;
@@ -2683,8 +2686,10 @@ class PlayerFormationPainter extends Component {
   final double Function(int index) visualAngleForSoldier;
   final double? Function(int index) attackCycleForSoldier;
   final bool Function(int index) isAlive;
+  final SoldierDesignPalette playerPalette;
 
   static const double _idleCycleSec = 1.4;
+  static const double _glowRadiusMul = 0.715;
   double _motionT = 0;
 
   @override
@@ -2704,6 +2709,8 @@ class PlayerFormationPainter extends Component {
     order.sort((int a, int b) =>
         soldierWorldPosition(a).y.compareTo(soldierWorldPosition(b).y));
 
+    final List<Color> tier = factionTierList(playerPalette);
+
     for (final int i in order) {
       final CohortSoldier s = runtime.soldier(i);
       final SoldierModel m = s.model;
@@ -2711,6 +2718,24 @@ class PlayerFormationPainter extends Component {
       final double half = m.paintSize / 2;
       final double angle = visualAngleForSoldier(i);
       final double? aCycleT = attackCycleForSoldier(i);
+
+      final double glowR = m.paintSize * _glowRadiusMul;
+      canvas.drawCircle(
+        Offset(p.x, p.y),
+        glowR,
+        Paint()
+          ..shader = ui.Gradient.radial(
+            Offset(p.x, p.y),
+            glowR,
+            <Color>[
+              tier[1].withValues(alpha: 0.35),
+              tier[2].withValues(alpha: 0.14),
+              tier[3].withValues(alpha: 0),
+            ],
+            <double>[0.0, 0.55, 1.0],
+          ),
+      );
+
       canvas.save();
       canvas.translate(p.x, p.y);
       canvas.rotate(angle);
