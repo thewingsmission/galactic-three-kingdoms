@@ -394,7 +394,7 @@ final List<SoldierShapePart> _kGildedBastionRawParts = <SoldierShapePart>[
       motion: SoldierPartMotion.attackProbeExtend,
       motionSign: 1.0,
       motionAmplitudeRad: 60.0,
-      stackRole: SoldierPartStackRole.attack,
+      stackRole: SoldierPartStackRole.underlay,
     ),
     SoldierShapePart(
       fillVertices: <Offset>[

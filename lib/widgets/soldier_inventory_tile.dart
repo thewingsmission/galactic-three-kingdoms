@@ -94,12 +94,12 @@ class _SoldierInventoryTileState extends State<SoldierInventoryTile>
                       ? AnimatedBuilder(
                           animation: _ctrl,
                           builder: (BuildContext context, Widget? child) {
-                            return SoldierAttackPreviewColumn(
-                              design: design,
-                              palette: widget.rosterPalette,
-                              motionT: _continuousMotionT,
-                              strokeWidth: 2.25,
-                              uniformIdleDesigns: kSoldierDesignCatalog,
+                            return CustomPaint(
+                              painter: RosterMiniSoldierPainter(
+                                design: design,
+                                palette: widget.rosterPalette,
+                                motionT: _continuousMotionT,
+                              ),
                             );
                           },
                         )
