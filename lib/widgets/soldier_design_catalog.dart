@@ -2119,7 +2119,7 @@ final SoldierDesign _kProductionEmberSigil = SoldierDesign(
   attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Sigil thrust'),
   maxHp: 150,
   attackDamage: 35,
-  knockbackSpeed: 262.5,
+  knockbackSpeed: 270,
 );
 
 final SoldierDesign _kProductionBloodStar = SoldierDesign(
@@ -2173,6 +2173,7 @@ final SoldierDesign _kProductionBoxGrin = SoldierDesign(
   attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Punch', nominalAttacksPerSecond: 0.4286),
   maxHp: 30,
   attackDamage: 1,
+  knockbackSpeed: 75,
 );
 
 /// Tri Fury production — triangle body with vertical ellipse eyes + brow lines + arrogant smirk.
@@ -2261,6 +2262,7 @@ final SoldierDesign _kProductionTriFury = SoldierDesign(
   attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Punch', nominalAttacksPerSecond: 0.4286),
   maxHp: 30,
   attackDamage: 1,
+  knockbackSpeed: 75,
 );
 
 /// Orb Joy production — circle body with arc eyes + open mouth.
@@ -2347,6 +2349,7 @@ final SoldierDesign _kProductionOrbJoy = SoldierDesign(
   attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Punch', nominalAttacksPerSecond: 0.4286),
   maxHp: 30,
   attackDamage: 1,
+  knockbackSpeed: 75,
 );
 
 /// Production tab / war roster.
