@@ -619,6 +619,7 @@ final SoldierDesign _kLegendaryCastleCat = SoldierDesign(
   attack: const SoldierAttackSpec(
     mode: SoldierAttackMode.none,
     label: 'Crown strike',
+    nominalAttacksPerSecond: 0.7143,
   ),
 );
 
@@ -2116,7 +2117,7 @@ final SoldierDesign _kProductionEmberSigil = SoldierDesign(
   rangePlotHubModel: Offset.zero,
   crownVfxMode: CrownVfxMode.none,
   parts: _emberSigilProdParts(),
-  attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Sigil thrust'),
+  attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Sigil thrust', nominalAttacksPerSecond: 0.9091),
   maxHp: 150,
   attackDamage: 35,
   knockbackSpeed: 270,
@@ -2170,7 +2171,7 @@ final SoldierDesign _kProductionBoxGrin = SoldierDesign(
       stackRole: SoldierPartStackRole.hitZone,
     ),
   ],
-  attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Punch', nominalAttacksPerSecond: 0.4286),
+  attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Punch', nominalAttacksPerSecond: 0.5263),
   maxHp: 30,
   attackDamage: 1,
   knockbackSpeed: 75,
@@ -2259,7 +2260,7 @@ final SoldierDesign _kProductionTriFury = SoldierDesign(
       stackRole: SoldierPartStackRole.hitZone,
     ),
   ],
-  attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Punch', nominalAttacksPerSecond: 0.4286),
+  attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Punch', nominalAttacksPerSecond: 0.5263),
   maxHp: 30,
   attackDamage: 1,
   knockbackSpeed: 75,
@@ -2346,7 +2347,7 @@ final SoldierDesign _kProductionOrbJoy = SoldierDesign(
       stackRole: SoldierPartStackRole.hitZone,
     ),
   ],
-  attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Punch', nominalAttacksPerSecond: 0.4286),
+  attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Punch', nominalAttacksPerSecond: 0.5263),
   maxHp: 30,
   attackDamage: 1,
   knockbackSpeed: 75,

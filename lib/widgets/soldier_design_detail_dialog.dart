@@ -156,7 +156,6 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final Color accent = widget.rarity.accentColor;
     final double cr = combatContactRadiusWorld(_parts);
     final Size mq = MediaQuery.sizeOf(context);
     final ({double width, double height}) modelBb =
@@ -167,20 +166,6 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
     );
     final SoldierDesignCombatSnapshot combat =
         soldierDesignCombatSnapshot(widget.design);
-    final TextStyle statsStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.45),
-      fontSize: 9,
-      height: 1.25,
-    );
-    final String statsInline =
-        '${modelBb.width.toStringAsFixed(1)}×${modelBb.height.toStringAsFixed(1)} · '
-        '${combat.contactZoneLabel} · '
-        'contact area ${combat.contactZoneAreaModel.toStringAsFixed(0)} · '
-        'attack area ${combat.attackZoneAreaModel.toStringAsFixed(0)} · '
-        'atk r${combat.attackZoneRadiusModel.toStringAsFixed(1)} · '
-        'det r${combat.detectionZoneRadiusModel.toStringAsFixed(1)} · '
-        '${combat.attacksPerSecond.toStringAsFixed(2)}/s';
-
     return Dialog(
       insetPadding: const EdgeInsets.all(10),
       backgroundColor: const Color(0xFF121018),
@@ -195,78 +180,29 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
+                  Text(
+                    widget.design.name,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              widget.design.name,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                statsInline,
-                                style: statsStyle,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          '${widget.design.attack.label} · ${_paletteLabel(_palette)}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: accent,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: SegmentedButton<SoldierDesignPalette>(
-                            style: SegmentedButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 4,
-                              ),
-                            ),
-                            showSelectedIcon: false,
-                            segments: const <ButtonSegment<SoldierDesignPalette>>[
-                              ButtonSegment<SoldierDesignPalette>(
-                                value: SoldierDesignPalette.red,
-                                label: Text('Red', style: TextStyle(fontSize: 12)),
-                                icon: Icon(Icons.circle, size: 10, color: Color(0xFFE57373)),
-                              ),
-                              ButtonSegment<SoldierDesignPalette>(
-                                value: SoldierDesignPalette.yellow,
-                                label: Text('Yellow', style: TextStyle(fontSize: 12)),
-                                icon: Icon(Icons.circle, size: 10, color: Color(0xFFFFC107)),
-                              ),
-                              ButtonSegment<SoldierDesignPalette>(
-                                value: SoldierDesignPalette.blue,
-                                label: Text('Blue', style: TextStyle(fontSize: 12)),
-                                icon: Icon(Icons.circle, size: 10, color: Color(0xFF64B5F6)),
-                              ),
-                            ],
-                            selected: <SoldierDesignPalette>{_palette},
-                            onSelectionChanged: (Set<SoldierDesignPalette> next) {
-                              _setPalette(next.first);
-                            },
-                            multiSelectionEnabled: false,
-                            emptySelectionAllowed: false,
-                          ),
-                        ),
-                      ],
+                    child: DefaultTextStyle(
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 10,
+                        height: 1.4,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text('W ${modelBb.width.ceil()}  H ${modelBb.height.ceil()}  HP ${widget.design.maxHp}'),
+                          Text('ATK ${widget.design.attackDamage}  KB ${widget.design.knockbackSpeed.ceil()}  ${combat.attacksPerSecond.toStringAsPrecision(3)}/s'),
+                        ],
+                      ),
                     ),
                   ),
                   IconButton(
@@ -274,6 +210,46 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
                     icon: const Icon(Icons.close, color: Colors.white70, size: 28),
                   ),
                 ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SegmentedButton<SoldierDesignPalette>(
+                  style: SegmentedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                  ),
+                  showSelectedIcon: false,
+                  segments: const <ButtonSegment<SoldierDesignPalette>>[
+                    ButtonSegment<SoldierDesignPalette>(
+                      value: SoldierDesignPalette.red,
+                      label: Text('Red', style: TextStyle(fontSize: 12)),
+                      icon: Icon(Icons.circle, size: 10, color: Color(0xFFE57373)),
+                    ),
+                    ButtonSegment<SoldierDesignPalette>(
+                      value: SoldierDesignPalette.yellow,
+                      label: Text('Yellow', style: TextStyle(fontSize: 12)),
+                      icon: Icon(Icons.circle, size: 10, color: Color(0xFFFFC107)),
+                    ),
+                    ButtonSegment<SoldierDesignPalette>(
+                      value: SoldierDesignPalette.blue,
+                      label: Text('Blue', style: TextStyle(fontSize: 12)),
+                      icon: Icon(Icons.circle, size: 10, color: Color(0xFF64B5F6)),
+                    ),
+                  ],
+                  selected: <SoldierDesignPalette>{_palette},
+                  onSelectionChanged: (Set<SoldierDesignPalette> next) {
+                    _setPalette(next.first);
+                  },
+                  multiSelectionEnabled: false,
+                  emptySelectionAllowed: false,
+                ),
               ),
             ),
             const Divider(height: 1, color: Colors.white24),
@@ -472,7 +448,10 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
                                 child: PixelRulersFrame(
                                   thickness: rulerL,
                                   modelPlotCoords: rangeModelRuler,
-                                  child: rangeStack(t, t),
+                                  child: rangeStack(
+                                    t,
+                                    attackCycleTFromMotionT(t, widget.design),
+                                  ),
                                 ),
                               );
                             },
@@ -540,11 +519,4 @@ class _SoldierDesignDetailDialogBodyState extends State<_SoldierDesignDetailDial
     );
   }
 
-  String _paletteLabel(SoldierDesignPalette p) {
-    return switch (p) {
-      SoldierDesignPalette.red => 'Red scheme',
-      SoldierDesignPalette.yellow => 'Yellow scheme',
-      SoldierDesignPalette.blue => 'Blue scheme',
-    };
-  }
 }

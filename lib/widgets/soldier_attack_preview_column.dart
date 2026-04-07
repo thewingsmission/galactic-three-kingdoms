@@ -9,6 +9,12 @@ import 'multi_polygon_soldier_painter.dart';
 import 'soldier_idle_uniform_scale.dart';
 import 'upward_attack_painter.dart';
 
+double attackCycleTFromMotionT(double motionT, SoldierDesign design) {
+  final double scale =
+      design.attack.displayAttacksPerSecond * SoldierAttackSpec.kPreviewCycleSeconds;
+  return motionT * scale;
+}
+
 /// Attack column preview: optional VFX band + soldier; [SoldierAttackMode.none] uses full height.
 /// Attack painter uses [MultiPolygonSoldierPainter.layoutMetrics] so effects match soldier size
 /// in narrow columns (e.g. detail popup).
@@ -109,7 +115,7 @@ class SoldierAttackPreviewColumn extends StatelessWidget {
                           displayPalette: palette,
                           strokeWidth: strokeWidth,
                           motionT: motionT,
-                          attackCycleT: motionT,
+                          attackCycleT: attackCycleTFromMotionT(motionT, design),
                           uniformWorldScale: lockedWorldToPixel,
                           fixedModelAnchor: stableAnchor,
                           crownVfxMode: design.crownVfxMode,

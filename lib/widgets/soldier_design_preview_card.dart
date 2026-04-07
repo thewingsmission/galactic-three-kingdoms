@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../models/soldier_design.dart';
 import '../models/soldier_design_palette.dart';
 import '../models/soldier_rarity.dart';
-import 'soldier_attack_preview_column.dart';
+import 'multi_polygon_soldier_painter.dart';
 import 'soldier_design_catalog.dart';
+import 'soldier_idle_uniform_scale.dart';
 
 /// Larger silhouette + looping **upward** attack preview for the design gallery.
 class SoldierDesignPreviewCard extends StatefulWidget {
@@ -72,12 +73,24 @@ class _SoldierDesignPreviewCardState extends State<SoldierDesignPreviewCard>
                   AnimatedBuilder(
                     animation: _ctrl,
                     builder: (BuildContext context, Widget? child) {
-                      return SoldierAttackPreviewColumn(
-                        design: widget.design,
-                        palette: widget.palette,
-                        motionT: _continuousMotionT,
-                        strokeWidth: widget.design.strokeWidth,
-                        uniformIdleDesigns: kSoldierDesignCatalog,
+                      final double sigma = soldierIdleUniformWorldToPixel(
+                        Size(c.maxWidth, c.maxHeight),
+                        kSoldierDesignCatalog,
+                      ) * 1.6;
+                      final Offset anchor = MultiPolygonSoldierPainter.modelBboxCenter(
+                        parts: widget.design.parts,
+                        motionT: 0.25,
+                      );
+                      return CustomPaint(
+                        size: Size(c.maxWidth, c.maxHeight),
+                        painter: MultiPolygonSoldierPainter(
+                          parts: widget.design.parts,
+                          displayPalette: widget.palette,
+                          strokeWidth: widget.design.strokeWidth,
+                          motionT: _continuousMotionT,
+                          uniformWorldScale: sigma,
+                          fixedModelAnchor: anchor,
+                        ),
                       );
                     },
                   ),
