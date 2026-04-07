@@ -306,23 +306,38 @@ class MultiPolygonSoldierPainter extends CustomPainter {
     return verts.map((Offset v) => v + delta).toList();
   }
 
-  /// Radial outward probe: moves [transformed] vertices away from the origin
-  /// along the direction from origin to the centroid of [raw] (rest-position vertices).
+  /// Radial outward probe: optionally scales [transformed] vertices around their centroid,
+  /// then moves them away from the origin along the direction from origin to the centroid
+  /// of [raw] (rest-position vertices). Scale factor interpolates 1→[motionProbeScale] with [e].
   static List<Offset> _applyRadialProbe(
     SoldierShapePart part,
     List<Offset> raw,
     List<Offset> transformed,
     double e,
   ) {
-    final Offset cen = _sCentroid(raw);
-    final double len = cen.distance;
+    final Offset rawCen = _sCentroid(raw);
+    final double len = rawCen.distance;
     if (len < 1e-6) return transformed;
+
+    // Scale around transformed centroid when motionProbeScale != 1.
+    final double sf = 1.0 + (part.motionProbeScale - 1.0) * e;
+    List<Offset> result = transformed;
+    if ((sf - 1.0).abs() > 1e-6) {
+      final Offset tc = _sCentroid(transformed);
+      result = transformed
+          .map((Offset v) => Offset(
+                tc.dx + (v.dx - tc.dx) * sf,
+                tc.dy + (v.dy - tc.dy) * sf,
+              ))
+          .toList();
+    }
+
     final double dist = part.motion == SoldierPartMotion.orbitSpinRadialProbe
         ? part.motionProbeDistance * e
         : part.motionAmplitudeRad.abs() * e;
-    final Offset dir = Offset(cen.dx / len, cen.dy / len);
+    final Offset dir = Offset(rawCen.dx / len, rawCen.dy / len);
     final Offset delta = dir * dist;
-    return transformed.map((Offset v) => v + delta).toList();
+    return result.map((Offset v) => v + delta).toList();
   }
 
   /// Transformed fill vertices (same motion as [paint]); for overlays (e.g. range preview).
@@ -616,6 +631,106 @@ class MultiPolygonSoldierPainter extends CustomPainter {
     }
   }
 
+  /// Draws 5-pointed stars streaming radially outward from each
+  /// [SoldierPartMotion.radialProbe] attack triangle during the attack cycle.
+  /// Stars emit from the hub-star position, are solid-filled with black outline,
+  /// sized 1×–1.5× the hub star, and randomly spread around the radial axis.
+  static void _paintRadialStarStream(
+    Canvas canvas,
+    List<Offset> screenVerts,
+    List<Offset> rawVerts,
+    double envelope,
+    double motionT,
+    double pixelScale,
+    SoldierDesignPalette palette,
+    double hubStarScreenR,
+    Offset? hubStarScreen,
+    int partSeed,
+  ) {
+    if (screenVerts.length < 3) return;
+    final double e = envelope.clamp(0.0, 1.0);
+    if (e < 0.01) return;
+
+    final Offset rawCen = _sCentroid(rawVerts);
+    final double rawLen = rawCen.distance;
+    if (rawLen < 1e-6) return;
+
+    // Screen-space tip (furthest vertex along radial direction).
+    final Offset screenCen = _sCentroid(screenVerts);
+    final Offset dirModel = Offset(rawCen.dx / rawLen, rawCen.dy / rawLen);
+    Offset screenTip = screenVerts[0];
+    double maxProj = -1e18;
+    for (final Offset sv in screenVerts) {
+      final double proj =
+          (sv.dx - screenCen.dx) * dirModel.dx +
+          (sv.dy - screenCen.dy) * dirModel.dy;
+      if (proj > maxProj) {
+        maxProj = proj;
+        screenTip = sv;
+      }
+    }
+
+    final Offset tipOff = screenTip - screenCen;
+    final double tipDist = tipOff.distance;
+    if (tipDist < 1e-3) return;
+    final Offset dir = Offset(tipOff.dx / tipDist, tipOff.dy / tipDist);
+    final Offset perp = Offset(-dir.dy, dir.dx);
+
+    // Emit from hub star centre (falls back to arrow centroid).
+    final Offset emitOrigin = hubStarScreen ?? screenCen;
+
+    final ({Color bright, Color mid, Color deep}) fc = palette.crownFlameColors;
+    const int numStars = 12;
+    const double speed = 2.8;
+    final double reachPx = pixelScale * 35;
+    final double spreadPx = hubStarScreenR * 4.4;
+    final double outStroke = (pixelScale * 0.7).clamp(0.4, 2.5);
+    final double minR = hubStarScreenR;
+    final double maxR = hubStarScreenR * 1.5;
+
+    for (int i = 0; i < numStars; i++) {
+      final int seed = partSeed * 97 + i * 131;
+      final double r0 = ((seed * 7919) & 0xFFFF) / 65536.0;
+      final double r1 = ((seed * 6151 + 3571) & 0xFFFF) / 65536.0;
+      final double r2 = ((seed * 4337 + 8923) & 0xFFFF) / 65536.0;
+      final double r3 = ((seed * 2749 + 5147) & 0xFFFF) / 65536.0;
+
+      final double phase = (motionT * speed + r0) % 1.0;
+
+      // Opaque for ~80% of life, then quick fade in the last ~20%.
+      final double lifeFade = phase < 0.8 ? 1.0 : (1.0 - (phase - 0.8) / 0.2);
+      final double alpha = e * lifeFade;
+      if (alpha < 0.03) continue;
+
+      final double starR = minR + (maxR - minR) * r1;
+      final double lateralSpread = (r2 - 0.5) * 2.0 * spreadPx * phase;
+      final double dist = phase * reachPx * (0.8 + 0.4 * r3);
+      final Offset center = emitOrigin + dir * dist + perp * lateralSpread;
+
+      final double rot = motionT * 3.0 + r0 * math.pi * 2;
+      final Color col =
+          Color.lerp(fc.bright, fc.mid, r1 * 0.6) ?? fc.bright;
+
+      final List<Offset> sv =
+          _starburstVerts(center, 5, starR, starR * 0.42, rot);
+      final Path sp = _pathFromOffsets(sv);
+      canvas.drawPath(
+        sp,
+        Paint()
+          ..color = col.withValues(alpha: alpha)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawPath(
+        sp,
+        Paint()
+          ..color = const Color(0xFF000000).withValues(alpha: alpha * 0.85)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = outStroke
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (parts.isEmpty) return;
@@ -817,6 +932,54 @@ class MultiPolygonSoldierPainter extends CustomPainter {
       }
     }
 
+    // Radial star stream VFX for radialProbe attack parts.
+    if (attackCycleT != null) {
+      final double radEnv = attackProbeEnvelope(attackCycleT!);
+      if (radEnv > 0.01) {
+        for (int i = 0; i < parts.length; i++) {
+          final SoldierShapePart p = parts[i];
+          if (p.stackRole != SoldierPartStackRole.attack) continue;
+          if (p.motion != SoldierPartMotion.radialProbe) continue;
+          final List<Offset>? fv = fillX[i];
+          if (fv == null || fv.length < 3) continue;
+
+          // Compute hub star screen radius + centroid from the next part (hub star).
+          double hubStarScreenR = scale * 4;
+          Offset? hubStarScreen;
+          if (i + 1 < parts.length &&
+              parts[i + 1].motion == SoldierPartMotion.orbitSpinRadialProbe) {
+            final List<Offset>? hv = parts[i + 1].fillVertices;
+            if (hv != null && hv.length >= 3) {
+              final Offset hc = _sCentroid(hv);
+              double mr = 0;
+              for (final Offset v in hv) {
+                final double d = (v - hc).distance;
+                if (d > mr) mr = d;
+              }
+              hubStarScreenR = mr * scale;
+            }
+            final List<Offset>? hvT = fillX[i + 1];
+            if (hvT != null && hvT.length >= 3) {
+              hubStarScreen = map(_sCentroid(hvT));
+            }
+          }
+
+          _paintRadialStarStream(
+            canvas,
+            fv.map(map).toList(),
+            p.fillVertices!,
+            radEnv,
+            motionT,
+            scale,
+            displayPalette,
+            hubStarScreenR,
+            hubStarScreen,
+            i,
+          );
+        }
+      }
+    }
+
     paintPartsForRole(SoldierPartStackRole.overlay);
   }
 
@@ -845,6 +1008,8 @@ class MultiPolygonSoldierPainter extends CustomPainter {
           a.motionPivot != b.motionPivot ||
           a.motionSign != b.motionSign ||
           a.motionAmplitudeRad != b.motionAmplitudeRad ||
+          a.motionProbeDistance != b.motionProbeDistance ||
+          a.motionProbeScale != b.motionProbeScale ||
           a.stackRole != b.stackRole) {
         return true;
       }

@@ -86,6 +86,7 @@ class SoldierShapePart {
     this.motionSign = 1.0,
     this.motionAmplitudeRad = 0.42,
     this.motionProbeDistance = 0,
+    this.motionProbeScale = 1.0,
     this.stackRole = SoldierPartStackRole.body,
   })  : assert(fillTier >= 1 && fillTier <= 5),
         assert(
@@ -119,6 +120,9 @@ class SoldierShapePart {
   /// where [motionAmplitudeRad] is reserved for idle rotation speed. 0 = unused.
   final double motionProbeDistance;
 
+  /// Scale factor at full probe extension (radial probe only). 1.0 = no scaling.
+  final double motionProbeScale;
+
   /// Z-order / parent grouping for paint and range overlays (see [SoldierPartStackRole]).
   final SoldierPartStackRole stackRole;
 }
@@ -146,6 +150,9 @@ class SoldierDesign {
     this.rangePlotHubModel,
     bool paintCrownFlames = false,
     CrownVfxMode? crownVfxMode,
+    this.maxHp = 100,
+    this.attackDamage = 20,
+    this.knockbackSpeed = 350.0,
   })  : _rarityOverride = rarity,
         crownVfxMode = crownVfxMode ??
             (paintCrownFlames ? CrownVfxMode.flames : CrownVfxMode.none),
@@ -158,6 +165,10 @@ class SoldierDesign {
   final SoldierAttackSpec attack;
   final Offset? rangePlotHubModel;
   final CrownVfxMode crownVfxMode;
+
+  final int maxHp;
+  final int attackDamage;
+  final double knockbackSpeed;
 
   bool get paintCrownFlames => crownVfxMode != CrownVfxMode.none;
 

@@ -21,7 +21,7 @@ class InventoryScreen extends StatefulWidget {
 
 class _InventoryScreenState extends State<InventoryScreen>
     with SingleTickerProviderStateMixin {
-  static const int _inventorySize = 10;
+  static const int _inventorySize = 16;
   static const int _maxCohortSize = 10;
 
   /// Matches compact [SoldierInventoryTile] preview for cohort stack hit area.
@@ -37,9 +37,10 @@ class _InventoryScreenState extends State<InventoryScreen>
   /// 360° / 9 = 40° per slot for soldiers 2–10.
   static const int _ringSlots = 9;
 
-  /// Per-slot roster: 10 × production Gilded Bastion.
+  /// Per-slot roster: 8 × Ember Sigil + 8 × Gilded Bastion.
   static final List<SoldierDesign> _kRoster = List<SoldierDesign>.unmodifiable(<SoldierDesign>[
-    for (int i = 0; i < _inventorySize; i++) kProductionSoldierDesignCatalog.first,
+    for (int i = 0; i < 8; i++) kProductionSoldierDesignCatalog[1],
+    for (int i = 0; i < 8; i++) kProductionSoldierDesignCatalog[0],
   ]);
 
   SoldierDesignPalette _palette = SoldierDesignPalette.yellow;
@@ -418,7 +419,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                       Expanded(
                         child: GridView.builder(
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
+                            crossAxisCount: 4,
                             mainAxisSpacing: 6,
                             crossAxisSpacing: 6,
                             childAspectRatio: 0.78,

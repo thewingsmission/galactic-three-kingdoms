@@ -2241,7 +2241,7 @@ List<SoldierShapePart> _emberSigilProdParts() {
     final SoldierShapePart arrow = scaled[1 + k];
     final SoldierShapePart star = scaled[7 + k];
 
-    // Arrow triangle — radial probe only (no idle motion)
+    // Arrow triangle — radial probe only (no idle motion), scales to 1.8× at max extension
     out.add(SoldierShapePart(
       fillVertices: arrow.fillVertices,
       fillTier: arrow.fillTier,
@@ -2249,10 +2249,11 @@ List<SoldierShapePart> _emberSigilProdParts() {
       strokeWidth: arrow.strokeWidth,
       motion: SoldierPartMotion.radialProbe,
       motionAmplitudeRad: kThrustDist,
+      motionProbeScale: 1.8,
       stackRole: SoldierPartStackRole.attack,
     ));
 
-    // Hub star — idle CW spin + radial probe during attack
+    // Hub star — idle CW spin + radial probe during attack, scales with arrow
     out.add(SoldierShapePart(
       fillVertices: star.fillVertices,
       fillTier: star.fillTier,
@@ -2263,10 +2264,11 @@ List<SoldierShapePart> _emberSigilProdParts() {
       motionAmplitudeRad: math.pi * 0.3,
       motionSign: -1.0,
       motionProbeDistance: kThrustDist,
+      motionProbeScale: 1.8,
       stackRole: SoldierPartStackRole.attack,
     ));
 
-    // Hit zone image (same shape/position as arrow) — radial probe tracks arrow
+    // Hit zone image (same shape/position as arrow) — radial probe tracks arrow, same scale
     out.add(SoldierShapePart(
       fillVertices: arrow.fillVertices,
       fillTier: 1,
@@ -2274,6 +2276,7 @@ List<SoldierShapePart> _emberSigilProdParts() {
       strokeWidth: 0,
       motion: SoldierPartMotion.radialProbe,
       motionAmplitudeRad: kThrustDist,
+      motionProbeScale: 1.8,
       stackRole: SoldierPartStackRole.hitZone,
     ));
   }
@@ -2360,6 +2363,9 @@ final SoldierDesign _kProductionEmberSigil = SoldierDesign(
   crownVfxMode: CrownVfxMode.none,
   parts: _emberSigilProdParts(),
   attack: const SoldierAttackSpec(mode: SoldierAttackMode.none, label: 'Sigil thrust'),
+  maxHp: 150,
+  attackDamage: 35,
+  knockbackSpeed: 262.5,
 );
 
 final SoldierDesign _kProductionBloodStar = SoldierDesign(

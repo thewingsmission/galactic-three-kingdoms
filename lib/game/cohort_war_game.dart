@@ -546,8 +546,10 @@ class CohortWarGame extends Forge2DGame {
       playerCohort.soldierCount,
       (_) => playerCohort.visualAngle,
     );
-    _playerHp = List<int>.filled(playerCohort.soldierCount, kGildedBastionMaxHp);
-    _playerMaxHp = List<int>.filled(playerCohort.soldierCount, kGildedBastionMaxHp);
+    _playerHp = List<int>.generate(playerCohort.soldierCount,
+        (int i) => playerCohort.soldier(i).model.design?.maxHp ?? kGildedBastionMaxHp);
+    _playerMaxHp = List<int>.generate(playerCohort.soldierCount,
+        (int i) => playerCohort.soldier(i).model.design?.maxHp ?? kGildedBastionMaxHp);
     _playerAttackCycleT = List<double>.filled(playerCohort.soldierCount, 0);
     _playerLockedEnemy = List<String?>.filled(playerCohort.soldierCount, null);
     _playerDamagedThisPhase = List<Set<String>>.generate(
@@ -1237,8 +1239,9 @@ class CohortWarGame extends Forge2DGame {
     _enemyAttackPlayerEntry.add(<String, double>{});
     _enemyDetectionPlayerEntry.add(<String, double>{});
     _lastEnemySoldierFacing.add(0);
-    _enemyHp.add(kGildedBastionMaxHp);
-    _enemyMaxHp.add(kGildedBastionMaxHp);
+    final int eHp = s.model.design?.maxHp ?? kGildedBastionMaxHp;
+    _enemyHp.add(eHp);
+    _enemyMaxHp.add(eHp);
     _enemyAttackCycleT.add(0);
     _enemyLockedPlayer.add(null);
     _enemyDamagedThisPhase.add(<String>{});
@@ -1491,22 +1494,25 @@ class CohortWarGame extends Forge2DGame {
 
       if (inAttack) {
         final Vector2 attackerPos = playerSoldierBodies[i].body.position;
+        final SoldierDesign? atkDesign = playerCohort.soldier(i).model.design;
+        final int atkDmg = atkDesign?.attackDamage ?? kGildedBastionAttackDmg;
+        final double atkKb = atkDesign?.knockbackSpeed ?? kKnockbackSpeed;
         for (int ej = 0; ej < enemySoldiers.length; ej++) {
           if (!_enemyAlive[ej]) continue;
           final String ek = 'e-$ej';
           if (_playerDamagedThisPhase[i].contains(ek)) continue;
           if (_enemyContactInPlayerAttackZone(i, ek)) {
             _playerDamagedThisPhase[i].add(ek);
-            _enemyHp[ej] = (_enemyHp[ej] - kGildedBastionAttackDmg).clamp(0, _enemyMaxHp[ej]);
+            _enemyHp[ej] = (_enemyHp[ej] - atkDmg).clamp(0, _enemyMaxHp[ej]);
             final Vector2 damagedCenter = enemySoldiers[ej].body.body.position.clone();
             final Vector2 dir = damagedCenter - attackerPos;
             if (dir.length2 > 0.01) {
               enemySoldiers[ej].body.body.linearVelocity.setFrom(
-                dir.normalized() * kKnockbackSpeed,
+                dir.normalized() * atkKb,
               );
               _enemyKnockbackTimer[ej] = kKnockbackCooldown;
             }
-            _spawnDamageText(damagedCenter, kGildedBastionAttackDmg, playerPalette);
+            _spawnDamageText(damagedCenter, atkDmg, playerPalette);
             if (_enemyHp[ej] <= 0) {
               _killEnemy(ej);
             }
@@ -1575,22 +1581,25 @@ class CohortWarGame extends Forge2DGame {
       if (inAttack) {
         final Vector2 attackerPos = enemySoldiers[ei].body.body.position;
         final SoldierDesignPalette attackerPal = enemySoldiers[ei].palette;
+        final SoldierDesign? eAtkDesign = enemySoldiers[ei].soldier.model.design;
+        final int eAtkDmg = eAtkDesign?.attackDamage ?? kGildedBastionAttackDmg;
+        final double eAtkKb = eAtkDesign?.knockbackSpeed ?? kKnockbackSpeed;
         for (int pj = 0; pj < playerCohort.soldierCount; pj++) {
           if (!_playerAlive[pj]) continue;
           final String pk = 'p-$pj';
           if (_enemyDamagedThisPhase[ei].contains(pk)) continue;
           if (_playerContactInEnemyAttackZone(ei, pk)) {
             _enemyDamagedThisPhase[ei].add(pk);
-            _playerHp[pj] = (_playerHp[pj] - kGildedBastionAttackDmg).clamp(0, _playerMaxHp[pj]);
+            _playerHp[pj] = (_playerHp[pj] - eAtkDmg).clamp(0, _playerMaxHp[pj]);
             final Vector2 damagedCenter = playerSoldierBodies[pj].body.position.clone();
             final Vector2 dir = damagedCenter - attackerPos;
             if (dir.length2 > 0.01) {
               playerSoldierBodies[pj].body.linearVelocity.setFrom(
-                dir.normalized() * kKnockbackSpeed,
+                dir.normalized() * eAtkKb,
               );
               _playerKnockbackTimer[pj] = kKnockbackCooldown;
             }
-            _spawnDamageText(damagedCenter, kGildedBastionAttackDmg, attackerPal);
+            _spawnDamageText(damagedCenter, eAtkDmg, attackerPal);
             if (_playerHp[pj] <= 0) _killPlayer(pj);
           }
         }
@@ -1600,16 +1609,16 @@ class CohortWarGame extends Forge2DGame {
           if (_enemyDamagedThisPhase[ei].contains(ek)) continue;
           if (_rivalContactInEnemyAttackZone(ei, ej)) {
             _enemyDamagedThisPhase[ei].add(ek);
-            _enemyHp[ej] = (_enemyHp[ej] - kGildedBastionAttackDmg).clamp(0, _enemyMaxHp[ej]);
+            _enemyHp[ej] = (_enemyHp[ej] - eAtkDmg).clamp(0, _enemyMaxHp[ej]);
             final Vector2 damagedCenter = enemySoldiers[ej].body.body.position.clone();
             final Vector2 dir = damagedCenter - attackerPos;
             if (dir.length2 > 0.01) {
               enemySoldiers[ej].body.body.linearVelocity.setFrom(
-                dir.normalized() * kKnockbackSpeed,
+                dir.normalized() * eAtkKb,
               );
               _enemyKnockbackTimer[ej] = kKnockbackCooldown;
             }
-            _spawnDamageText(damagedCenter, kGildedBastionAttackDmg, attackerPal);
+            _spawnDamageText(damagedCenter, eAtkDmg, attackerPal);
             if (_enemyHp[ej] <= 0) _killEnemy(ej);
           }
         }
