@@ -1,4 +1,4 @@
-package com.galactic3k.galactic_three_kingdoms_gameplay
+package com.thewingsmission.galacticthreekingdoms
 
 import io.flutter.embedding.android.FlutterActivity
 

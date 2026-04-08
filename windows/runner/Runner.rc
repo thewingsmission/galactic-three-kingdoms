@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.galactic3k" "\0"
-            VALUE "FileDescription", "galactic_three_kingdoms_gameplay" "\0"
+            VALUE "CompanyName", "com.thewingsmission" "\0"
+            VALUE "FileDescription", "galactic_three_kingdoms_epic_saga" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "galactic_three_kingdoms_gameplay" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.galactic3k. All rights reserved." "\0"
-            VALUE "OriginalFilename", "galactic_three_kingdoms_gameplay.exe" "\0"
-            VALUE "ProductName", "galactic_three_kingdoms_gameplay" "\0"
+            VALUE "InternalName", "galactic_three_kingdoms_epic_saga" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.thewingsmission. All rights reserved." "\0"
+            VALUE "OriginalFilename", "galactic_three_kingdoms_epic_saga.exe" "\0"
+            VALUE "ProductName", "galactic_three_kingdoms_epic_saga" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

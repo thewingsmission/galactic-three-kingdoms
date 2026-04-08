@@ -1,4 +1,4 @@
-# galactic_three_kingdoms_gameplay
+# galactic_three_kingdoms_epic_saga
 
 A new Flutter project.
 

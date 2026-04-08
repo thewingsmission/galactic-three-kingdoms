@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:galactic_three_kingdoms_gameplay/main.dart';
+import 'package:galactic_three_kingdoms_epic_saga/main.dart';
 
 void main() {
   testWidgets('Inventory landing screen loads', (WidgetTester tester) async {

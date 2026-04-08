@@ -3,8 +3,8 @@ import 'dart:math' as math;
 import 'package:flame/extensions.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:galactic_three_kingdoms_gameplay/game/cohort_kinematics.dart';
-import 'package:galactic_three_kingdoms_gameplay/models/cohort_models.dart';
+import 'package:galactic_three_kingdoms_epic_saga/game/cohort_kinematics.dart';
+import 'package:galactic_three_kingdoms_epic_saga/models/cohort_models.dart';
 
 void main() {
   group('cohort from deployment', () {
