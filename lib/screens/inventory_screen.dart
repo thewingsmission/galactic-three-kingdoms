@@ -2,18 +2,17 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../models/cohort_models.dart';
 import '../models/cohort_soldier.dart';
+import '../models/game_session_state.dart';
 import '../models/soldier_design.dart';
 import '../models/soldier_design_palette.dart';
 import '../models/soldier_faction_color_theme.dart';
-import '../widgets/soldier_design_catalog.dart';
 import '../widgets/soldier_inventory_tile.dart';
-import 'soldier_design_screen.dart';
-import 'war_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
-  const InventoryScreen({super.key});
+  const InventoryScreen({super.key, required this.session});
+
+  final GameSessionState session;
 
   @override
   State<InventoryScreen> createState() => _InventoryScreenState();
@@ -33,20 +32,9 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   /// 360° / 9 = 40° per slot for soldiers 2–10.
   static const int _ringSlots = 9;
-
-  /// Per-slot roster: 10 × Starry Hex + 10 × Helm Tower + 8 × Mild Square + 8 × Smug Triangle + 8 × Jolly Circle.
-  static final List<SoldierDesign> _kRoster = List<SoldierDesign>.unmodifiable(<SoldierDesign>[
-    for (int i = 0; i < 10; i++) kProductionSoldierDesignCatalog[1],
-    for (int i = 0; i < 10; i++) kProductionSoldierDesignCatalog[0],
-    for (int i = 0; i < 8; i++) kProductionSoldierDesignCatalog[3],
-    for (int i = 0; i < 8; i++) kProductionSoldierDesignCatalog[4],
-    for (int i = 0; i < 8; i++) kProductionSoldierDesignCatalog[5],
-  ]);
-
-  SoldierDesignPalette _palette = SoldierDesignPalette.yellow;
-
-  final List<bool> _selected = List<bool>.filled(_inventorySize, false);
-  final Map<int, Offset> _offsets = <int, Offset>{};
+  late SoldierDesignPalette _palette;
+  late List<bool> _selected;
+  late Map<int, Offset> _offsets;
   late final SoldierContact _soldierContact;
   late final List<SoldierContact> _soldierContacts;
 
@@ -71,10 +59,14 @@ class _InventoryScreenState extends State<InventoryScreen>
   @override
   void initState() {
     super.initState();
+    _palette = widget.session.palette;
+    _selected = List<bool>.from(widget.session.selected);
+    _offsets = Map<int, Offset>.from(widget.session.offsets);
+    _cohortLeaderIndex = widget.session.cohortLeaderIndex;
     _soldierContact = SoldierContact.fromDesign(
-      _kRoster.first, _kRoster.first.paintSize);
+      GameSessionState.roster.first, GameSessionState.roster.first.paintSize);
     _soldierContacts = <SoldierContact>[
-      for (final SoldierDesign d in _kRoster)
+      for (final SoldierDesign d in GameSessionState.roster)
         SoldierContact.fromDesign(d, d.paintSize),
     ];
     _idleMotionCtrl = AnimationController(
@@ -87,6 +79,12 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   @override
   void dispose() {
+    widget.session.saveInventoryState(
+      palette: _palette,
+      selected: _selected,
+      offsets: _offsets,
+      cohortLeaderIndex: _cohortLeaderIndex,
+    );
     _idleMotionCtrl.dispose();
     super.dispose();
   }
@@ -288,53 +286,6 @@ class _InventoryScreenState extends State<InventoryScreen>
     _dragIndex = null;
   }
 
-  CohortDeployment _buildDeployment() {
-    final List<PlacedSoldier> list = <PlacedSoldier>[];
-    final int? leader = _cohortLeaderIndex;
-    if (leader != null && _selected[leader]) {
-      list.add(
-        PlacedSoldier(
-          inventoryIndex: leader,
-          type: SoldierType.triangle,
-          localOffset: _offsets[leader] ?? Offset.zero,
-          soldierDesign: _kRoster[leader],
-          cohortPalette: _palette,
-        ),
-      );
-    }
-    for (int i = 0; i < _inventorySize; i++) {
-      if (!_selected[i] || i == leader) continue;
-      list.add(
-        PlacedSoldier(
-          inventoryIndex: i,
-          type: SoldierType.triangle,
-          localOffset: _offsets[i] ?? Offset.zero,
-          soldierDesign: _kRoster[i],
-          cohortPalette: _palette,
-        ),
-      );
-    }
-    return CohortDeployment(soldiers: list);
-  }
-
-  void _goToWar() {
-    final CohortDeployment d = _buildDeployment();
-    if (d.soldiers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select at least one soldier.')),
-      );
-      return;
-    }
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) => WarScreen(
-          deployment: d.copy(),
-          playerPalette: _palette,
-        ),
-      ),
-    );
-  }
-
   Widget _buildPaletteSelector() {
     return SegmentedButton<SoldierDesignPalette>(
       style: SegmentedButton.styleFrom(
@@ -390,7 +341,6 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme cs = Theme.of(context).colorScheme;
     final Color paletteAccent = factionTierList(_palette)[0];
     return Scaffold(
       body: Container(
@@ -442,7 +392,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                               index: i,
                               selected: _selected[i],
                               onTap: () => _toggleSlot(i),
-                              rosterDesign: _kRoster[i],
+                              rosterDesign: GameSessionState.roster[i],
                               rosterPalette: _palette,
                             );
                           },
@@ -451,71 +401,19 @@ class _InventoryScreenState extends State<InventoryScreen>
                       const SizedBox(height: 8),
                       Row(
                         children: <Widget>[
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () async {
-                                final SoldierDesignPalette? result =
-                                    await Navigator.of(context).push<SoldierDesignPalette>(
-                                  MaterialPageRoute<SoldierDesignPalette>(
-                                    builder: (BuildContext context) =>
-                                        SoldierDesignScreen(initialPalette: _palette),
-                                  ),
-                                );
-                                if (result != null && result != _palette) {
-                                  setState(() => _palette = result);
-                                }
-                              },
-                              icon: Icon(
-                                Icons.category_outlined,
-                                size: 18,
-                                color: paletteAccent,
-                              ),
-                              label: Text(
-                                'Designs',
-                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                      color: paletteAccent,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: paletteAccent,
-                                side: BorderSide(
-                                  color: paletteAccent.withValues(alpha: 0.55),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                  horizontal: 8,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                            ),
+                          IconButton.filledTonal(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.arrow_back),
                           ),
-                          const SizedBox(width: 8),
                           Expanded(
-                            child: FilledButton.icon(
-                              onPressed: _goToWar,
-                              icon: const Icon(Icons.shield_moon_outlined, size: 18),
-                              label: Text(
-                                'Go to War',
-                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                      color: cs.onPrimary,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: Text(
+                                'Set your cohort formation here.',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: Colors.white70,
                                     ),
-                              ),
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                  horizontal: 8,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                textAlign: TextAlign.left,
                               ),
                             ),
                           ),
@@ -605,7 +503,8 @@ class _InventoryScreenState extends State<InventoryScreen>
     return <Widget>[
       for (final int i in indices)
         () {
-          final double px = _kRoster[i].paintSize;
+          final SoldierDesign rosterDesign = GameSessionState.roster[i];
+          final double px = rosterDesign.paintSize;
           final double half = px / 2;
           return Positioned(
             left: origin.dx + (_offsets[i] ?? Offset.zero).dx - half,
@@ -614,7 +513,7 @@ class _InventoryScreenState extends State<InventoryScreen>
               child: CustomPaint(
                 size: Size(px, px),
                 painter: RosterMiniSoldierPainter(
-                  design: _kRoster[i],
+                  design: rosterDesign,
                   palette: _palette,
                   motionT: motionT,
                 ),

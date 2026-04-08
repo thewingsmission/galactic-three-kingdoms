@@ -71,6 +71,7 @@ flutter:
     - image/button_defense.png
     - image/button_target.png
     - image/icon.png
+    - image/The Wings Mission Logo (white).png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

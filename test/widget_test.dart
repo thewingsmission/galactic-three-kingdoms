@@ -3,11 +3,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:galactic_three_kingdoms_epic_saga/main.dart';
 
 void main() {
-  testWidgets('Inventory landing screen loads', (WidgetTester tester) async {
+  testWidgets('Splash transitions to main screen', (WidgetTester tester) async {
     await tester.pumpWidget(const GalacticGameplayApp());
-    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Galactic Three Kingdoms'), findsNothing);
 
-    expect(find.textContaining('Soldier inventory'), findsOneWidget);
-    expect(find.text('Go to War'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump();
+
+    expect(find.text('Galactic Three Kingdoms'), findsOneWidget);
+    expect(find.text('Inventory'), findsOneWidget);
+    expect(find.text('War'), findsOneWidget);
+    expect(find.text('Designs'), findsOneWidget);
   });
 }
