@@ -5,14 +5,28 @@ import 'package:galactic_three_kingdoms_epic_saga/main.dart';
 void main() {
   testWidgets('Splash transitions to main screen', (WidgetTester tester) async {
     await tester.pumpWidget(const GalacticGameplayApp());
-    expect(find.text('Galactic Three Kingdoms'), findsNothing);
+    expect(find.text('Inventory'), findsNothing);
 
-    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.pump();
 
-    expect(find.text('Galactic Three Kingdoms'), findsOneWidget);
+    expect(find.text('Codex'), findsOneWidget);
     expect(find.text('Inventory'), findsOneWidget);
     expect(find.text('War'), findsOneWidget);
-    expect(find.text('Designs'), findsOneWidget);
+    expect(find.text('Shop'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Pseudo3D'), findsOneWidget);
+  });
+
+  testWidgets('Pseudo3D preview opens from main screen', (WidgetTester tester) async {
+    await tester.pumpWidget(const GalacticGameplayApp());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    await tester.tap(find.text('Pseudo3D'));
+    await tester.pump();
+
+    expect(find.text('Pseudo3D Preview'), findsOneWidget);
+    expect(find.text('Codex'), findsNothing);
   });
 }

@@ -17,7 +17,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer(const Duration(milliseconds: 750), widget.onFinished);
+    _timer = Timer(const Duration(milliseconds: 250), widget.onFinished);
   }
 
   @override
@@ -32,7 +32,7 @@ class _SplashScreenState extends State<SplashScreen> {
       backgroundColor: Colors.black,
       body: Center(
         child: FractionallySizedBox(
-          widthFactor: 0.24,
+          widthFactor: 0.093,
           child: Image.asset(
             'image/The Wings Mission Logo (white).png',
             fit: BoxFit.contain,
