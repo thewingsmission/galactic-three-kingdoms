@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../models/soldier_design.dart';
 import '../models/soldier_design_palette.dart';
+import '../models/soldier_faction_color_theme.dart';
 import 'multi_polygon_soldier_painter.dart';
 import 'soldier_design_catalog.dart';
 import 'virtual_joystick.dart';
@@ -12,6 +13,8 @@ import 'virtual_joystick.dart';
 class Pseudo3DScene extends StatefulWidget {
   const Pseudo3DScene({
     super.key,
+    this.meshMode = Pseudo3DMeshMode.solid,
+    this.outlineHalfTransparentInnerTransparency = 0.9,
     this.boardBottomInset = 0,
     this.joystickBottomInset = 20,
     this.joystickLeftInset = 20,
@@ -22,6 +25,8 @@ class Pseudo3DScene extends StatefulWidget {
     this.showJoystick = true,
   });
 
+  final Pseudo3DMeshMode meshMode;
+  final double outlineHalfTransparentInnerTransparency;
   final double boardBottomInset;
   final double joystickBottomInset;
   final double joystickLeftInset;
@@ -33,6 +38,12 @@ class Pseudo3DScene extends StatefulWidget {
 
   @override
   State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
+}
+
+enum Pseudo3DMeshMode {
+  solid,
+  outlineTransparent,
+  outlineHalfTransparent,
 }
 
 class _Pseudo3DSceneState extends State<Pseudo3DScene>
@@ -159,6 +170,9 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                   child: CustomPaint(
                     painter: _Pseudo3DBoardPainter(
                       boardOffset: clampedOffset,
+                      meshMode: widget.meshMode,
+                      outlineHalfTransparentInnerTransparency:
+                          widget.outlineHalfTransparentInnerTransparency,
                     ),
                   ),
                 ),
@@ -335,12 +349,16 @@ class _RoleBottomMetrics {
 class _Pseudo3DBoardPainter extends CustomPainter {
   _Pseudo3DBoardPainter({
     required this.boardOffset,
+    required this.meshMode,
+    required this.outlineHalfTransparentInnerTransparency,
   });
 
   final Offset boardOffset;
+  final Pseudo3DMeshMode meshMode;
+  final double outlineHalfTransparentInnerTransparency;
 
   static const double _baseRadius = 28;
-  static const int _landSideHexes = 12;
+  static const int _landSideHexes = 25;
   static const double _planeDepthOffset = 860;
   static const double _cameraHeight = 250;
   static const double _cameraPitch = 0.93;
@@ -361,7 +379,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       if (polygon == null) continue;
       projected.add(
         polygon.copyWith(
-          fillColor: _territoryColor(localCenter),
+          fillColor: _territoryOuterColor(localCenter),
+          innerColor: _territoryInnerColor(localCenter),
         ),
       );
     }
@@ -372,10 +391,28 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     );
 
     for (final _ProjectedHexPolygon polygon in projected) {
+      final Path innerPath = _buildScaledInnerPath(polygon.path, polygon.center, 0.85);
+      final Path fillPath = switch (meshMode) {
+        Pseudo3DMeshMode.outlineTransparent =>
+          Path.combine(PathOperation.difference, polygon.path, innerPath),
+        Pseudo3DMeshMode.outlineHalfTransparent =>
+          Path.combine(PathOperation.difference, polygon.path, innerPath),
+        _ => polygon.path,
+      };
+
       canvas.drawPath(
-        polygon.path,
+        fillPath,
         Paint()..color = polygon.fillColor,
       );
+      if (meshMode == Pseudo3DMeshMode.outlineHalfTransparent) {
+        canvas.drawPath(
+          innerPath,
+          Paint()
+            ..color = polygon.innerColor.withValues(
+              alpha: (1 - outlineHalfTransparentInnerTransparency).clamp(0.0, 1.0),
+            ),
+        );
+      }
       canvas.drawPath(
         polygon.path,
         Paint()
@@ -410,7 +447,21 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       strokeScale: center.scale,
       depthT: center.depthT,
       fillColor: Colors.transparent,
+      innerColor: Colors.transparent,
+      center: center.screen,
     );
+  }
+
+  Path _buildScaledInnerPath(
+    Path outerPath,
+    Offset center,
+    double innerScale,
+  ) {
+    final Matrix4 transform = Matrix4.identity()
+      ..translate(center.dx, center.dy)
+      ..scale(innerScale, innerScale)
+      ..translate(-center.dx, -center.dy);
+    return outerPath.transform(transform.storage);
   }
 
   _ProjectedPoint _projectPoint(Offset world, Size size) {
@@ -440,7 +491,15 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     );
   }
 
-  Color _territoryColor(Offset center) {
+  Color _territoryOuterColor(Offset center) {
+    return _territoryPalette(center).outer;
+  }
+
+  Color _territoryInnerColor(Offset center) {
+    return _territoryPalette(center).inner;
+  }
+
+  ({Color outer, Color inner}) _territoryPalette(Offset center) {
     final Offset n = Offset(
       (center.dx / (_landExtentX * 2)) + 0.5,
       (center.dy / (landExtentY * 2)) + 0.5,
@@ -460,9 +519,22 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     final double blue =
         score(const Offset(0.82, 0.42), 0.92) + math.sin(n.dx * 10.0) * 0.03;
 
-    if (red >= yellow && red >= blue) return const Color(0xFFD65122);
-    if (yellow >= red && yellow >= blue) return const Color(0xFFE2BD10);
-    return const Color(0xFF5C8FA6);
+    if (red >= yellow && red >= blue) {
+      return (
+        outer: const Color(0xFFD65122),
+        inner: factionTierList(SoldierDesignPalette.red)[1],
+      );
+    }
+    if (yellow >= red && yellow >= blue) {
+      return (
+        outer: const Color(0xFFE2BD10),
+        inner: factionTierList(SoldierDesignPalette.yellow)[1],
+      );
+    }
+    return (
+      outer: const Color(0xFF5C8FA6),
+      inner: factionTierList(SoldierDesignPalette.blue)[1],
+    );
   }
 
   static Offset initialOffsetForViewport(
@@ -675,7 +747,10 @@ class _Pseudo3DBoardPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _Pseudo3DBoardPainter oldDelegate) {
-    return oldDelegate.boardOffset != boardOffset;
+    return oldDelegate.boardOffset != boardOffset ||
+        oldDelegate.meshMode != meshMode ||
+        oldDelegate.outlineHalfTransparentInnerTransparency !=
+            outlineHalfTransparentInnerTransparency;
   }
 
   static const double _landExtentX = _baseRadius * (1 + 1.5 * (_landSideHexes - 1));
@@ -726,24 +801,32 @@ class _ProjectedHexPolygon {
     required this.strokeScale,
     required this.depthT,
     required this.fillColor,
+    required this.innerColor,
+    required this.center,
   });
 
   final Path path;
   final double strokeScale;
   final double depthT;
   final Color fillColor;
+  final Color innerColor;
+  final Offset center;
 
   _ProjectedHexPolygon copyWith({
     Path? path,
     double? strokeScale,
     double? depthT,
     Color? fillColor,
+    Color? innerColor,
+    Offset? center,
   }) {
     return _ProjectedHexPolygon(
       path: path ?? this.path,
       strokeScale: strokeScale ?? this.strokeScale,
       depthT: depthT ?? this.depthT,
       fillColor: fillColor ?? this.fillColor,
+      innerColor: innerColor ?? this.innerColor,
+      center: center ?? this.center,
     );
   }
 }
