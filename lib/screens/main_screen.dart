@@ -26,7 +26,7 @@ class MainScreen extends StatelessWidget {
               children: <Widget>[
                 const Positioned.fill(
                   child: Pseudo3DScene(
-                    boardBottomInset: 132,
+                    boardBottomInset: 0,
                     joystickBottomInset: 138,
                     viewportHeightFactor: 0.92,
                   ),
@@ -314,25 +314,6 @@ class _StarfieldPainter extends CustomPainter {
       canvas.drawCircle(star, radius, paint);
     }
 
-    final Paint trail = Paint()
-      ..color = Colors.white.withValues(alpha: 0.06)
-      ..strokeWidth = 1.1
-      ..style = PaintingStyle.stroke;
-    final Path curve = Path()
-      ..moveTo(size.width * 0.06, size.height * 0.28)
-      ..quadraticBezierTo(
-        size.width * 0.24,
-        size.height * 0.18,
-        size.width * 0.42,
-        size.height * 0.31,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.58,
-        size.height * 0.42,
-        size.width * 0.82,
-        size.height * 0.27,
-      );
-    canvas.drawPath(curve, trail);
   }
 
   @override

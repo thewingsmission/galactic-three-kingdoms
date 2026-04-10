@@ -3,7 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
-import 'triangle_soldier.dart';
+import '../models/soldier_design.dart';
+import '../models/soldier_design_palette.dart';
+import 'multi_polygon_soldier_painter.dart';
+import 'soldier_design_catalog.dart';
 import 'virtual_joystick.dart';
 
 class Pseudo3DScene extends StatefulWidget {
@@ -35,13 +38,17 @@ class Pseudo3DScene extends StatefulWidget {
 class _Pseudo3DSceneState extends State<Pseudo3DScene>
     with SingleTickerProviderStateMixin {
   static const double _boardMoveSpeed = 220;
+  static const double _soldierMotionCycleSeconds = 1.4;
+  static const double _soldierAnchorScreenYOffsetFactor = 0.15;
+  static const double _markerBoxSize = 120;
 
   late final Ticker _ticker;
   Duration? _lastElapsed;
   Offset _joystick = Offset.zero;
   Offset _boardOffset = Offset.zero;
   Size _viewportSize = Size.zero;
-  double _anchorWorldY = 0;
+  double _shadowAnchorWorldY = 0;
+  double _soldierMotionT = 0;
   bool _didInitializeBoardOffset = false;
 
   @override
@@ -51,7 +58,15 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   }
 
   void _tick(Duration elapsed) {
+    final double elapsedSeconds =
+        elapsed.inMicroseconds / Duration.microsecondsPerSecond;
+    final double nextMotionT =
+        (elapsedSeconds / _soldierMotionCycleSeconds) % 1.0;
+
     if (_lastElapsed == null) {
+      setState(() {
+        _soldierMotionT = nextMotionT;
+      });
       _lastElapsed = elapsed;
       return;
     }
@@ -60,20 +75,24 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
         (elapsed - _lastElapsed!).inMicroseconds / Duration.microsecondsPerSecond;
     _lastElapsed = elapsed;
 
-    if (_joystick == Offset.zero || !mounted) return;
-
     setState(() {
-      Offset next = _boardOffset.translate(
-        -_joystick.dx * _boardMoveSpeed * dt,
-        _joystick.dy * _boardMoveSpeed * dt,
-      );
-      if (_viewportSize != Size.zero) {
-        next = _Pseudo3DBoardPainter.clampOffsetForAnchor(
-          next,
-          anchorWorldY: _anchorWorldY,
+      _soldierMotionT = nextMotionT;
+
+      if (_joystick != Offset.zero && mounted) {
+        final Offset proposed = _boardOffset.translate(
+          -_joystick.dx * _boardMoveSpeed * dt,
+          _joystick.dy * _boardMoveSpeed * dt,
         );
+        if (_viewportSize != Size.zero) {
+          _boardOffset = _Pseudo3DBoardPainter.clampOffsetForLocalAnchor(
+            currentOffset: _boardOffset,
+            proposedOffset: proposed,
+            anchorWorldY: _shadowAnchorWorldY,
+          );
+        } else {
+          _boardOffset = proposed;
+        }
       }
-      _boardOffset = next;
     });
   }
 
@@ -100,19 +119,38 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
               final double viewportHeight =
                   math.min(constraints.maxHeight * widget.viewportHeightFactor, widget.maxViewportHeight);
               _viewportSize = Size(viewportWidth, viewportHeight);
-              _anchorWorldY = _Pseudo3DBoardPainter.anchorWorldYForViewport(
+              final double totalScreenHeight =
+                  constraints.maxHeight + widget.boardBottomInset;
+              final double shadowCenterScreenY =
+                  totalScreenHeight / 2 +
+                  totalScreenHeight * _soldierAnchorScreenYOffsetFactor +
+                  _ProductionJollyCircleMarker.shadowCenterOffsetFromMarkerCenter(
+                    _markerBoxSize,
+                  );
+              final double viewportTop =
+                  (constraints.maxHeight - viewportHeight) / 2;
+              final double shadowCenterViewportY =
+                  shadowCenterScreenY - viewportTop;
+
+              _shadowAnchorWorldY = _Pseudo3DBoardPainter.anchorWorldYForViewport(
                 _viewportSize,
+                targetScreenY: shadowCenterViewportY,
               );
               final Offset initialOffset =
-                  _Pseudo3DBoardPainter.initialOffsetForViewport(_viewportSize);
+                  _Pseudo3DBoardPainter.initialOffsetForViewport(
+                _viewportSize,
+                targetScreenY: shadowCenterViewportY,
+              );
               if (!_didInitializeBoardOffset) {
                 _didInitializeBoardOffset = true;
                 _boardOffset = initialOffset;
               }
-              final Offset clampedOffset = _Pseudo3DBoardPainter.clampOffsetForAnchor(
-                _didInitializeBoardOffset ? _boardOffset : initialOffset,
-                anchorWorldY: _anchorWorldY,
+              final Offset clampedOffset = _Pseudo3DBoardPainter.clampOffsetForLocalAnchor(
+                currentOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
+                proposedOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
+                anchorWorldY: _shadowAnchorWorldY,
               );
+              _boardOffset = clampedOffset;
 
               return Center(
                 child: SizedBox(
@@ -129,13 +167,25 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
           ),
         ),
         Positioned.fill(
-          bottom: widget.boardBottomInset,
-          child: const IgnorePointer(
-            child: Center(
-              child: TriangleSoldier(
-                size: 72,
-                side: 48,
-              ),
+          child: IgnorePointer(
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                return Center(
+                  child: Transform.translate(
+                    offset: Offset(
+                      0,
+                      constraints.maxHeight * _soldierAnchorScreenYOffsetFactor,
+                    ),
+                    child: SizedBox(
+                      width: _markerBoxSize,
+                      height: _markerBoxSize,
+                      child: _ProductionJollyCircleMarker(
+                        motionT: _soldierMotionT,
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -152,6 +202,134 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
       ],
     );
   }
+}
+
+class _ProductionJollyCircleMarker extends StatelessWidget {
+  const _ProductionJollyCircleMarker({
+    required this.motionT,
+  });
+
+  static final SoldierDesign _design = kProductionSoldierDesignCatalog[5];
+  static const double _anchorMotionT = 0.25;
+  static final _RoleBottomMetrics _contactBottom = _bottomMetricsForRole(
+    SoldierPartStackRole.contact,
+  );
+  static final _RoleBottomMetrics _targetBottom = _bottomMetricsForRole(
+    SoldierPartStackRole.target,
+  );
+  final double motionT;
+
+  static double shadowCenterOffsetFromMarkerCenter(double markerBoxSize) {
+    final double size = markerBoxSize * 0.39;
+    final double scale = size / _design.paintSize;
+    final double targetBottomDeltaY =
+        (_targetBottom.point.dy - _contactBottom.point.dy) * scale;
+    final double shadowDiameter = size * 1.05;
+    return targetBottomDeltaY + shadowDiameter / 6;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double size = math.min(constraints.maxWidth, constraints.maxHeight) * 0.39;
+        final double scale = size / _design.paintSize;
+        final Offset contactBottomScreen = Offset(size / 2, size / 2);
+        final Offset targetBottomScreen = Offset(
+          contactBottomScreen.dx + (_targetBottom.point.dx - _contactBottom.point.dx) * scale,
+          contactBottomScreen.dy + (_targetBottom.point.dy - _contactBottom.point.dy) * scale,
+        );
+        final double shadowDiameter = size * 1.05;
+        final Offset shadowOffsetFromCenter = Offset(
+          0,
+          targetBottomScreen.dy + shadowDiameter / 6 - size / 2,
+        );
+
+        return Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Transform.translate(
+              offset: shadowOffsetFromCenter,
+              child: Transform.scale(
+                scaleY: 1 / 3,
+                alignment: Alignment.center,
+                child: Container(
+                  width: shadowDiameter,
+                  height: shadowDiameter,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.42),
+                    shape: BoxShape.circle,
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 10,
+                        spreadRadius: 3,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: size,
+              height: size,
+              child: CustomPaint(
+                painter: MultiPolygonSoldierPainter(
+                  parts: _design.parts,
+                  displayPalette: SoldierDesignPalette.yellow,
+                  strokeWidth: _design.strokeWidth,
+                  motionT: motionT,
+                  uniformWorldScale: size / _design.paintSize,
+                  fixedModelAnchor: _contactBottom.point,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+ 
+  static _RoleBottomMetrics _bottomMetricsForRole(SoldierPartStackRole role) {
+    final List<Offset> points = <Offset>[];
+    for (final SoldierShapePart part in _design.parts) {
+      if (part.stackRole != role) continue;
+      final List<Offset>? fill = MultiPolygonSoldierPainter.transformedFillVertices(
+        part,
+        _anchorMotionT,
+        null,
+      );
+      if (fill != null) {
+        points.addAll(fill);
+      }
+    }
+
+    if (points.isEmpty) {
+      return const _RoleBottomMetrics(point: Offset.zero);
+    }
+
+    double minX = points.first.dx;
+    double maxX = points.first.dx;
+    double maxY = points.first.dy;
+    for (final Offset p in points) {
+      if (p.dx < minX) minX = p.dx;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+
+    return _RoleBottomMetrics(
+      point: Offset((minX + maxX) / 2, maxY),
+    );
+  }
+}
+
+class _RoleBottomMetrics {
+  const _RoleBottomMetrics({
+    required this.point,
+  });
+
+  final Offset point;
 }
 
 class _Pseudo3DBoardPainter extends CustomPainter {
@@ -174,12 +352,6 @@ class _Pseudo3DBoardPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Rect rect = Offset.zero & size;
-    final Paint frame = Paint()
-      ..color = Colors.black.withValues(alpha: 0.24)
-      ..style = PaintingStyle.fill;
-    canvas.drawRect(rect, frame);
-
     final Offset worldOrigin = Offset(boardOffset.dx, boardOffset.dy);
     final List<_ProjectedHexPolygon> projected = <_ProjectedHexPolygon>[];
 
@@ -215,10 +387,15 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   }
 
   _ProjectedHexPolygon? _projectHex(Offset worldCenter, Size size) {
-    final _ProjectedPoint center = _projectPoint(worldCenter, size);
+    return _projectHexStatic(worldCenter, size);
+  }
+
+  static _ProjectedHexPolygon? _projectHexStatic(Offset worldCenter, Size size) {
+    final _ProjectedPoint center =
+        _projectPointStatic(worldCenter.dx, worldCenter.dy, size);
     final List<Offset> projectedVertices = <Offset>[
       for (final Offset local in _hexLocalVertices)
-        _projectPoint(worldCenter + local, size).screen,
+        _projectPointStatic(worldCenter.dx + local.dx, worldCenter.dy + local.dy, size).screen,
     ];
 
     final Path path = Path()
@@ -288,27 +465,25 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     return const Color(0xFF5C8FA6);
   }
 
-  static Offset clampOffsetForAnchor(
-    Offset offset, {
-    required double anchorWorldY,
+  static Offset initialOffsetForViewport(
+    Size viewport, {
+    double? targetScreenY,
   }) {
-    final Offset anchorLocal = Offset(-offset.dx, anchorWorldY - offset.dy);
-    final Offset boundaryProbe = anchorLocal.translate(0, -_hexHalfHeight);
-    final Offset clampedProbe = _clampPointToLand(boundaryProbe);
-    if ((clampedProbe - boundaryProbe).distanceSquared < 0.0001) {
-      return offset;
-    }
-    final Offset clampedLocal = clampedProbe.translate(0, _hexHalfHeight);
-    return Offset(-clampedLocal.dx, anchorWorldY - clampedLocal.dy);
-  }
-
-  static Offset initialOffsetForViewport(Size viewport) {
     if (viewport == Size.zero) return Offset.zero;
-    return Offset(0, anchorWorldYForViewport(viewport));
+    return Offset(
+      0,
+      anchorWorldYForViewport(
+        viewport,
+        targetScreenY: targetScreenY,
+      ),
+    );
   }
 
-  static double anchorWorldYForViewport(Size viewport) {
-    final double targetY = viewport.height / 2;
+  static double anchorWorldYForViewport(
+    Size viewport, {
+    double? targetScreenY,
+  }) {
+    final double targetY = targetScreenY ?? viewport.height / 2;
     double low = -landExtentY;
     double high = landExtentY;
     final bool increasing =
@@ -329,6 +504,61 @@ class _Pseudo3DBoardPainter extends CustomPainter {
 
   static double _projectScreenYForWorldY(double worldY, Size viewport) {
     return _projectPointStatic(0, worldY, viewport).screen.dy;
+  }
+
+  static double projectScreenYForWorldY(double worldY, Size viewport) {
+    return _projectScreenYForWorldY(worldY, viewport);
+  }
+
+  static Offset clampOffsetForLocalAnchor({
+    required Offset currentOffset,
+    required Offset proposedOffset,
+    required double anchorWorldY,
+  }) {
+    final Offset currentAnchorLocal =
+        Offset(-currentOffset.dx, anchorWorldY - currentOffset.dy);
+    final Offset proposedAnchorLocal =
+        Offset(-proposedOffset.dx, anchorWorldY - proposedOffset.dy);
+
+    if (_isPointInsideLand(proposedAnchorLocal)) {
+      return proposedOffset;
+    }
+
+    final Offset currentInside =
+        _isPointInsideLand(currentAnchorLocal)
+            ? currentAnchorLocal
+            : _clampPointToLand(currentAnchorLocal);
+    final Offset proposedClamped = _clampPointToLand(proposedAnchorLocal);
+    final Offset delta = proposedAnchorLocal - currentInside;
+    final double deltaLength = delta.distance;
+    if (deltaLength < 1e-6) {
+      return Offset(-currentInside.dx, anchorWorldY - currentInside.dy);
+    }
+
+    final Offset collisionNormal =
+        _nearestBoundaryNormal(proposedAnchorLocal) ?? Offset.zero;
+    final double blockedDot =
+        delta.dx * collisionNormal.dx + delta.dy * collisionNormal.dy;
+
+    Offset finalLocal = proposedClamped;
+    if (collisionNormal != Offset.zero && blockedDot > 0) {
+      final Offset tangent = Offset(-collisionNormal.dy, collisionNormal.dx);
+      final double tangentDot =
+          delta.dx * tangent.dx + delta.dy * tangent.dy;
+      final Offset tangentDir =
+          tangentDot >= 0 ? tangent : Offset(-tangent.dx, -tangent.dy);
+      final double tangentLength = tangentDot.abs();
+      final Offset slidLocal = _binarySearchAlongLandBoundary(
+        validPoint: proposedClamped,
+        direction: tangentDir,
+        maxDistance: tangentLength,
+      );
+      if ((slidLocal - proposedClamped).distanceSquared > 1e-6) {
+        finalLocal = slidLocal;
+      }
+    }
+
+    return Offset(-finalLocal.dx, anchorWorldY - finalLocal.dy);
   }
 
   static Offset _clampPointToLand(Offset point) {
@@ -352,6 +582,55 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     }
 
     return bestPoint;
+  }
+
+  static Offset? _nearestBoundaryNormal(Offset point) {
+    Offset? bestNormal;
+    double bestDistance2 = double.infinity;
+
+    for (final Offset center in _landTileCenters) {
+      final List<Offset> vertices = _hexVerticesForCenter(center);
+      for (int i = 0; i < vertices.length; i++) {
+        final Offset a = vertices[i];
+        final Offset b = vertices[(i + 1) % vertices.length];
+        final Offset nearest = _nearestPointOnSegment(point, a, b);
+        final Offset diff = point - nearest;
+        final double distance2 = diff.distanceSquared;
+        if (distance2 < bestDistance2 && distance2 > 1e-10) {
+          bestDistance2 = distance2;
+          final double invLength = 1 / math.sqrt(distance2);
+          bestNormal = Offset(diff.dx * invLength, diff.dy * invLength);
+        }
+      }
+    }
+
+    return bestNormal;
+  }
+
+  static Offset _binarySearchAlongLandBoundary({
+    required Offset validPoint,
+    required Offset direction,
+    required double maxDistance,
+  }) {
+    double low = 0;
+    double high = maxDistance;
+    for (int i = 0; i < 18; i++) {
+      final double mid = (low + high) / 2;
+      final Offset candidate = Offset(
+        validPoint.dx + direction.dx * mid,
+        validPoint.dy + direction.dy * mid,
+      );
+      if (_isPointInsideLand(candidate)) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+
+    return Offset(
+      validPoint.dx + direction.dx * low,
+      validPoint.dy + direction.dy * low,
+    );
   }
 
   static bool _isPointInsideLand(Offset point) {
