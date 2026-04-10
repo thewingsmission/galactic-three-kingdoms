@@ -14,7 +14,6 @@ class Pseudo3DScene extends StatefulWidget {
   const Pseudo3DScene({
     super.key,
     this.meshMode = Pseudo3DMeshMode.solid,
-    this.outlineHalfTransparentInnerTransparency = 0.9,
     this.boardBottomInset = 0,
     this.joystickBottomInset = 20,
     this.joystickLeftInset = 20,
@@ -26,7 +25,6 @@ class Pseudo3DScene extends StatefulWidget {
   });
 
   final Pseudo3DMeshMode meshMode;
-  final double outlineHalfTransparentInnerTransparency;
   final double boardBottomInset;
   final double joystickBottomInset;
   final double joystickLeftInset;
@@ -99,6 +97,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
             currentOffset: _boardOffset,
             proposedOffset: proposed,
             anchorWorldY: _shadowAnchorWorldY,
+            hexGap: 0,
           );
         } else {
           _boardOffset = proposed;
@@ -146,11 +145,13 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
               _shadowAnchorWorldY = _Pseudo3DBoardPainter.anchorWorldYForViewport(
                 _viewportSize,
                 targetScreenY: shadowCenterViewportY,
+                hexGap: 0,
               );
               final Offset initialOffset =
                   _Pseudo3DBoardPainter.initialOffsetForViewport(
                 _viewportSize,
                 targetScreenY: shadowCenterViewportY,
+                hexGap: 0,
               );
               if (!_didInitializeBoardOffset) {
                 _didInitializeBoardOffset = true;
@@ -160,6 +161,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                 currentOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
                 proposedOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
                 anchorWorldY: _shadowAnchorWorldY,
+                hexGap: 0,
               );
               _boardOffset = clampedOffset;
 
@@ -171,8 +173,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                     painter: _Pseudo3DBoardPainter(
                       boardOffset: clampedOffset,
                       meshMode: widget.meshMode,
-                      outlineHalfTransparentInnerTransparency:
-                          widget.outlineHalfTransparentInnerTransparency,
                     ),
                   ),
                 ),
@@ -350,12 +350,12 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   _Pseudo3DBoardPainter({
     required this.boardOffset,
     required this.meshMode,
-    required this.outlineHalfTransparentInnerTransparency,
   });
 
   final Offset boardOffset;
   final Pseudo3DMeshMode meshMode;
-  final double outlineHalfTransparentInnerTransparency;
+  static const double _fixedInnerTransparency = 0.9;
+  static const double _fixedInnerScale = 0.847;
 
   static const double _baseRadius = 28;
   static const int _landSideHexes = 25;
@@ -373,7 +373,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     final Offset worldOrigin = Offset(boardOffset.dx, boardOffset.dy);
     final List<_ProjectedHexPolygon> projected = <_ProjectedHexPolygon>[];
 
-    for (final Offset localCenter in _landTileCenters) {
+    for (final Offset localCenter in _baseLandTileCenters) {
       final Offset worldCenter = localCenter + worldOrigin;
       final _ProjectedHexPolygon? polygon = _projectHex(worldCenter, size);
       if (polygon == null) continue;
@@ -391,7 +391,11 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     );
 
     for (final _ProjectedHexPolygon polygon in projected) {
-      final Path innerPath = _buildScaledInnerPath(polygon.path, polygon.center, 0.85);
+      final Path innerPath = _buildScaledInnerPath(
+        polygon.path,
+        polygon.center,
+        _fixedInnerScale,
+      );
       final Path fillPath = switch (meshMode) {
         Pseudo3DMeshMode.outlineTransparent =>
           Path.combine(PathOperation.difference, polygon.path, innerPath),
@@ -409,7 +413,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
           innerPath,
           Paint()
             ..color = polygon.innerColor.withValues(
-              alpha: (1 - outlineHalfTransparentInnerTransparency).clamp(0.0, 1.0),
+              alpha: (1 - _fixedInnerTransparency).clamp(0.0, 1.0),
             ),
         );
       }
@@ -540,6 +544,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   static Offset initialOffsetForViewport(
     Size viewport, {
     double? targetScreenY,
+    double hexGap = 0,
   }) {
     if (viewport == Size.zero) return Offset.zero;
     return Offset(
@@ -547,6 +552,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       anchorWorldYForViewport(
         viewport,
         targetScreenY: targetScreenY,
+        hexGap: hexGap,
       ),
     );
   }
@@ -554,6 +560,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   static double anchorWorldYForViewport(
     Size viewport, {
     double? targetScreenY,
+    double hexGap = 0,
   }) {
     final double targetY = targetScreenY ?? viewport.height / 2;
     double low = -landExtentY;
@@ -586,21 +593,22 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     required Offset currentOffset,
     required Offset proposedOffset,
     required double anchorWorldY,
+    double hexGap = 0,
   }) {
     final Offset currentAnchorLocal =
         Offset(-currentOffset.dx, anchorWorldY - currentOffset.dy);
     final Offset proposedAnchorLocal =
         Offset(-proposedOffset.dx, anchorWorldY - proposedOffset.dy);
 
-    if (_isPointInsideLand(proposedAnchorLocal)) {
+    if (_isPointInsideLand(proposedAnchorLocal, hexGap)) {
       return proposedOffset;
     }
 
     final Offset currentInside =
-        _isPointInsideLand(currentAnchorLocal)
+        _isPointInsideLand(currentAnchorLocal, hexGap)
             ? currentAnchorLocal
-            : _clampPointToLand(currentAnchorLocal);
-    final Offset proposedClamped = _clampPointToLand(proposedAnchorLocal);
+            : _clampPointToLand(currentAnchorLocal, hexGap);
+    final Offset proposedClamped = _clampPointToLand(proposedAnchorLocal, hexGap);
     final Offset delta = proposedAnchorLocal - currentInside;
     final double deltaLength = delta.distance;
     if (deltaLength < 1e-6) {
@@ -608,7 +616,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     }
 
     final Offset collisionNormal =
-        _nearestBoundaryNormal(proposedAnchorLocal) ?? Offset.zero;
+        _nearestBoundaryNormal(proposedAnchorLocal, hexGap) ?? Offset.zero;
     final double blockedDot =
         delta.dx * collisionNormal.dx + delta.dy * collisionNormal.dy;
 
@@ -624,6 +632,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         validPoint: proposedClamped,
         direction: tangentDir,
         maxDistance: tangentLength,
+        hexGap: hexGap,
       );
       if ((slidLocal - proposedClamped).distanceSquared > 1e-6) {
         finalLocal = slidLocal;
@@ -633,13 +642,13 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     return Offset(-finalLocal.dx, anchorWorldY - finalLocal.dy);
   }
 
-  static Offset _clampPointToLand(Offset point) {
-    if (_isPointInsideLand(point)) return point;
+  static Offset _clampPointToLand(Offset point, double hexGap) {
+    if (_isPointInsideLand(point, hexGap)) return point;
 
-    Offset bestPoint = _landTileCenters.first;
+    Offset bestPoint = _baseLandTileCenters.first;
     double bestDistance2 = double.infinity;
 
-    for (final Offset center in _landTileCenters) {
+    for (final Offset center in _baseLandTileCenters) {
       final List<Offset> vertices = _hexVerticesForCenter(center);
       for (int i = 0; i < vertices.length; i++) {
         final Offset a = vertices[i];
@@ -656,11 +665,11 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     return bestPoint;
   }
 
-  static Offset? _nearestBoundaryNormal(Offset point) {
+  static Offset? _nearestBoundaryNormal(Offset point, double hexGap) {
     Offset? bestNormal;
     double bestDistance2 = double.infinity;
 
-    for (final Offset center in _landTileCenters) {
+    for (final Offset center in _baseLandTileCenters) {
       final List<Offset> vertices = _hexVerticesForCenter(center);
       for (int i = 0; i < vertices.length; i++) {
         final Offset a = vertices[i];
@@ -683,6 +692,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     required Offset validPoint,
     required Offset direction,
     required double maxDistance,
+    double hexGap = 0,
   }) {
     double low = 0;
     double high = maxDistance;
@@ -692,7 +702,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         validPoint.dx + direction.dx * mid,
         validPoint.dy + direction.dy * mid,
       );
-      if (_isPointInsideLand(candidate)) {
+      if (_isPointInsideLand(candidate, hexGap)) {
         low = mid;
       } else {
         high = mid;
@@ -705,8 +715,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     );
   }
 
-  static bool _isPointInsideLand(Offset point) {
-    for (final Offset center in _landTileCenters) {
+  static bool _isPointInsideLand(Offset point, double hexGap) {
+    for (final Offset center in _baseLandTileCenters) {
       if (_isPointInsideHex(point, center)) return true;
     }
     return false;
@@ -748,13 +758,11 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _Pseudo3DBoardPainter oldDelegate) {
     return oldDelegate.boardOffset != boardOffset ||
-        oldDelegate.meshMode != meshMode ||
-        oldDelegate.outlineHalfTransparentInnerTransparency !=
-            outlineHalfTransparentInnerTransparency;
+        oldDelegate.meshMode != meshMode;
   }
 
   static const double _landExtentX = _baseRadius * (1 + 1.5 * (_landSideHexes - 1));
-  static final List<Offset> _landTileCenters = _buildLandTileCenters();
+  static final List<Offset> _baseLandTileCenters = _buildLandTileCenters();
   static const List<Offset> _hexLocalVertices = <Offset>[
     Offset(_baseRadius, 0),
     Offset(_baseRadius * 0.5, _hexHalfHeight),

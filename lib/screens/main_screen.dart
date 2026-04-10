@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/pseudo3d_scene.dart';
 
-class MainScreen extends StatefulWidget {
+class MainScreen extends StatelessWidget {
   const MainScreen({
     super.key,
     required this.onOpenInventory,
@@ -13,14 +13,6 @@ class MainScreen extends StatefulWidget {
   final VoidCallback onOpenInventory;
   final VoidCallback onOpenWar;
   final VoidCallback onOpenDesigns;
-
-  @override
-  State<MainScreen> createState() => _MainScreenState();
-}
-
-class _MainScreenState extends State<MainScreen> {
-  Pseudo3DMeshMode _selectedMode = Pseudo3DMeshMode.solid;
-  double _outlineHalfTransparentInnerTransparency = 0.9;
 
   @override
   Widget build(BuildContext context) {
@@ -34,39 +26,10 @@ class _MainScreenState extends State<MainScreen> {
               children: <Widget>[
                 Positioned.fill(
                   child: Pseudo3DScene(
-                    meshMode: _selectedMode,
-                    outlineHalfTransparentInnerTransparency:
-                        _outlineHalfTransparentInnerTransparency,
+                    meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
                     boardBottomInset: 0,
                     joystickBottomInset: 138,
                     viewportHeightFactor: 0.92,
-                  ),
-                ),
-                Positioned(
-                  top: 12,
-                  right: 16,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: <Widget>[
-                      _MeshModeToggleGroup(
-                        selectedMode: _selectedMode,
-                        onSelected: (Pseudo3DMeshMode mode) {
-                          setState(() => _selectedMode = mode);
-                        },
-                      ),
-                      if (_selectedMode == Pseudo3DMeshMode.outlineHalfTransparent)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: _TransparencySliderCard(
-                            value: _outlineHalfTransparentInnerTransparency,
-                            onChanged: (double value) {
-                              setState(() {
-                                _outlineHalfTransparentInnerTransparency = value;
-                              });
-                            },
-                          ),
-                        ),
-                    ],
                   ),
                 ),
                 Align(
@@ -74,163 +37,13 @@ class _MainScreenState extends State<MainScreen> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     child: _BottomRibbon(
-                      onOpenDesigns: widget.onOpenDesigns,
-                      onOpenInventory: widget.onOpenInventory,
-                      onOpenWar: widget.onOpenWar,
+                      onOpenDesigns: onOpenDesigns,
+                      onOpenInventory: onOpenInventory,
+                      onOpenWar: onOpenWar,
                     ),
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MeshModeToggleGroup extends StatelessWidget {
-  const _MeshModeToggleGroup({
-    required this.selectedMode,
-    required this.onSelected,
-  });
-
-  final Pseudo3DMeshMode selectedMode;
-  final ValueChanged<Pseudo3DMeshMode> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.28),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.14),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: Pseudo3DMeshMode.values
-              .map(
-                (Pseudo3DMeshMode mode) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: _MeshModeButton(
-                    label: _labelForMode(mode),
-                    isSelected: mode == selectedMode,
-                    onTap: () => onSelected(mode),
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-      ),
-    );
-  }
-
-  String _labelForMode(Pseudo3DMeshMode mode) {
-    return switch (mode) {
-      Pseudo3DMeshMode.solid => 'Solid',
-      Pseudo3DMeshMode.outlineTransparent => 'Outline + Transparent',
-      Pseudo3DMeshMode.outlineHalfTransparent => 'Outline + Half-transparent',
-    };
-  }
-}
-
-class _MeshModeButton extends StatelessWidget {
-  const _MeshModeButton({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withValues(alpha: 0.16)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected
-                ? Colors.white.withValues(alpha: 0.62)
-                : Colors.white.withValues(alpha: 0.22),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: isSelected ? 1 : 0.82),
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            letterSpacing: 0.2,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TransparencySliderCard extends StatelessWidget {
-  const _TransparencySliderCard({
-    required this.value,
-    required this.onChanged,
-  });
-
-  final double value;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 280,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.32),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.14),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            'Inner Transparency ${((value * 100).round())}%',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.92),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.2,
-            ),
-          ),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 3,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-            ),
-            child: Slider(
-              value: value,
-              min: 0,
-              max: 1,
-              divisions: 100,
-              activeColor: Colors.white,
-              inactiveColor: Colors.white.withValues(alpha: 0.22),
-              onChanged: onChanged,
             ),
           ),
         ],
