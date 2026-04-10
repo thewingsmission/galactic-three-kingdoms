@@ -5,7 +5,6 @@ import 'models/game_session_state.dart';
 import 'models/soldier_design_palette.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/main_screen.dart';
-import 'screens/pseudo3d_screen.dart';
 import 'screens/soldier_design_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/war_screen.dart';
@@ -70,7 +69,6 @@ class _AppFlowState extends State<AppFlow> {
           onOpenInventory: _openInventory,
           onOpenWar: _openWar,
           onOpenDesigns: _openDesigns,
-          onOpenPseudo3D: _openPseudo3D,
         ),
       ),
     );
@@ -119,14 +117,6 @@ class _AppFlowState extends State<AppFlow> {
     if (result != null) {
       setState(() => _session.palette = result);
     }
-  }
-
-  Future<void> _openPseudo3D() async {
-    await _navigatorKey.currentState?.push<void>(
-      _instantRoute<void>(
-        const Pseudo3DScreen(),
-      ),
-    );
   }
 
   @override

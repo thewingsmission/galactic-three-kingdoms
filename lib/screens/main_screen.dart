@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/soldier_design_palette.dart';
-import '../models/soldier_faction_color_theme.dart';
+import '../widgets/pseudo3d_scene.dart';
 
 class MainScreen extends StatelessWidget {
   const MainScreen({
@@ -9,13 +8,11 @@ class MainScreen extends StatelessWidget {
     required this.onOpenInventory,
     required this.onOpenWar,
     required this.onOpenDesigns,
-    required this.onOpenPseudo3D,
   });
 
   final VoidCallback onOpenInventory;
   final VoidCallback onOpenWar;
   final VoidCallback onOpenDesigns;
-  final VoidCallback onOpenPseudo3D;
 
   @override
   Widget build(BuildContext context) {
@@ -24,31 +21,14 @@ class MainScreen extends StatelessWidget {
         fit: StackFit.expand,
         children: <Widget>[
           const _GalacticBackground(),
-          Positioned.fill(
-            bottom: 138,
-            child: IgnorePointer(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                child: _HexagonMesh(),
-              ),
-            ),
-          ),
           SafeArea(
             child: Stack(
               children: <Widget>[
-                Positioned(
-                  top: 12,
-                  right: 16,
-                  child: OutlinedButton(
-                    onPressed: onOpenPseudo3D,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.55),
-                      ),
-                      backgroundColor: Colors.black.withValues(alpha: 0.18),
-                    ),
-                    child: const Text('Pseudo3D'),
+                const Positioned.fill(
+                  child: Pseudo3DScene(
+                    boardBottomInset: 132,
+                    joystickBottomInset: 138,
+                    viewportHeightFactor: 0.92,
                   ),
                 ),
                 Align(
@@ -206,10 +186,12 @@ class _BottomRibbon extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: actions
-                .map((_RibbonAction action) => _RibbonButton(
-                      label: action.label,
-                      onTap: action.onTap,
-                    ))
+                .map(
+                  (_RibbonAction action) => _RibbonButton(
+                    label: action.label,
+                    onTap: action.onTap,
+                  ),
+                )
                 .toList(),
           ),
         ],
@@ -288,141 +270,6 @@ class _RibbonButton extends StatelessWidget {
       ),
     );
   }
-}
-
-class _HexagonMesh extends StatelessWidget {
-  _HexagonMesh();
-
-  final List<SoldierDesignPalette> _themes = const <SoldierDesignPalette>[
-    SoldierDesignPalette.red,
-    SoldierDesignPalette.yellow,
-    SoldierDesignPalette.blue,
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final double tileWidth =
-            (constraints.maxWidth / 14.5).clamp(28.0, 54.0);
-        final double tileHeight = tileWidth * _HexagonClipper.heightFactor;
-        final double horizontalStep = tileWidth * 0.75;
-        final int cols = (constraints.maxWidth / horizontalStep).ceil() + 3;
-        final int rows = (constraints.maxHeight / tileHeight).ceil() + 3;
-
-        return ClipRect(
-          child: Stack(
-            children: <Widget>[
-              for (int col = -1; col < cols; col++)
-                for (int row = -1; row < rows; row++)
-                  Positioned(
-                    left: col * horizontalStep,
-                    top: row * tileHeight + (col.isOdd ? tileHeight / 2 : 0),
-                    child: _HexagonPrefab(
-                      width: tileWidth,
-                      outerColor: factionTierList(
-                        _themes[(row + col + 12) % _themes.length],
-                      )[1],
-                    ),
-                  ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _HexagonPrefab extends StatelessWidget {
-  const _HexagonPrefab({
-    required this.width,
-    required this.outerColor,
-  });
-
-  final double width;
-  final Color outerColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final double height = width * _HexagonClipper.heightFactor;
-    return SizedBox(
-      width: width,
-      height: height,
-      child: CustomPaint(
-        size: Size(width, height),
-        painter: _HexagonMaskPainter(
-          color: outerColor,
-          innerScale: 0.93,
-        ),
-      ),
-    );
-  }
-}
-
-class _HexagonMaskPainter extends CustomPainter {
-  const _HexagonMaskPainter({
-    required this.color,
-    required this.innerScale,
-  });
-
-  final Color color;
-  final double innerScale;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Path outer = _hexagonPath(size);
-    final Size innerSize = Size(size.width * innerScale, size.height * innerScale);
-    final Offset innerOffset = Offset(
-      (size.width - innerSize.width) / 2,
-      (size.height - innerSize.height) / 2,
-    );
-    final Path inner = _hexagonPath(innerSize).shift(innerOffset);
-
-    final Path shell = Path.combine(
-      PathOperation.difference,
-      outer,
-      inner,
-    );
-
-    canvas.drawPath(shell, Paint()..color = color);
-  }
-
-  static Path _hexagonPath(Size size) {
-    return Path()
-      ..moveTo(size.width * 0.25, 0)
-      ..lineTo(size.width * 0.75, 0)
-      ..lineTo(size.width, size.height * 0.5)
-      ..lineTo(size.width * 0.75, size.height)
-      ..lineTo(size.width * 0.25, size.height)
-      ..lineTo(0, size.height * 0.5)
-      ..close();
-  }
-
-  @override
-  bool shouldRepaint(covariant _HexagonMaskPainter oldDelegate) {
-    return oldDelegate.color != color || oldDelegate.innerScale != innerScale;
-  }
-}
-
-class _HexagonClipper extends CustomClipper<Path> {
-  const _HexagonClipper();
-
-  static const double heightFactor = 0.8660254037844386;
-
-  @override
-  Path getClip(Size size) {
-    return Path()
-      ..moveTo(size.width * 0.25, 0)
-      ..lineTo(size.width * 0.75, 0)
-      ..lineTo(size.width, size.height * 0.5)
-      ..lineTo(size.width * 0.75, size.height)
-      ..lineTo(size.width * 0.25, size.height)
-      ..lineTo(0, size.height * 0.5)
-      ..close();
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
 class _StarfieldPainter extends CustomPainter {

@@ -1,20 +1,38 @@
 import 'dart:math' as math;
-import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
-import '../widgets/triangle_soldier.dart';
-import '../widgets/virtual_joystick.dart';
+import 'triangle_soldier.dart';
+import 'virtual_joystick.dart';
 
-class Pseudo3DScreen extends StatefulWidget {
-  const Pseudo3DScreen({super.key});
+class Pseudo3DScene extends StatefulWidget {
+  const Pseudo3DScene({
+    super.key,
+    this.boardBottomInset = 0,
+    this.joystickBottomInset = 20,
+    this.joystickLeftInset = 20,
+    this.viewportHeightFactor = 0.72,
+    this.maxViewportHeight = 540,
+    this.viewportWidthFactor = 0.94,
+    this.maxViewportWidth = 980,
+    this.showJoystick = true,
+  });
+
+  final double boardBottomInset;
+  final double joystickBottomInset;
+  final double joystickLeftInset;
+  final double viewportHeightFactor;
+  final double maxViewportHeight;
+  final double viewportWidthFactor;
+  final double maxViewportWidth;
+  final bool showJoystick;
 
   @override
-  State<Pseudo3DScreen> createState() => _Pseudo3DScreenState();
+  State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
 }
 
-class _Pseudo3DScreenState extends State<Pseudo3DScreen>
+class _Pseudo3DSceneState extends State<Pseudo3DScene>
     with SingleTickerProviderStateMixin {
   static const double _boardMoveSpeed = 220;
 
@@ -71,174 +89,69 @@ class _Pseudo3DScreenState extends State<Pseudo3DScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          const _Pseudo3DBackground(),
-          SafeArea(
-            child: Stack(
-              children: <Widget>[
-                Positioned(
-                  left: 16,
-                  top: 12,
-                  child: IconButton.filledTonal(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                ),
-                const Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 14,
-                  child: IgnorePointer(
-                    child: Text(
-                      'Pseudo3D Preview',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: LayoutBuilder(
-                    builder: (BuildContext context, BoxConstraints constraints) {
-                      final double viewportWidth =
-                          math.min(constraints.maxWidth * 0.94, 980);
-                      final double viewportHeight =
-                          math.min(constraints.maxHeight * 0.72, 540);
-                      _viewportSize = Size(viewportWidth, viewportHeight);
-                      _anchorWorldY = _Pseudo3DBoardPainter.anchorWorldYForViewport(
-                        _viewportSize,
-                      );
-                      final Offset initialOffset =
-                          _Pseudo3DBoardPainter.initialOffsetForViewport(
-                        _viewportSize,
-                      );
-                      if (!_didInitializeBoardOffset) {
-                        _didInitializeBoardOffset = true;
-                        _boardOffset = initialOffset;
-                      }
-                      final Offset clampedOffset =
-                          _Pseudo3DBoardPainter.clampOffsetForAnchor(
-                        _didInitializeBoardOffset ? _boardOffset : initialOffset,
-                        anchorWorldY: _anchorWorldY,
-                      );
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
+          bottom: widget.boardBottomInset,
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final double viewportWidth =
+                  math.min(constraints.maxWidth * widget.viewportWidthFactor, widget.maxViewportWidth);
+              final double viewportHeight =
+                  math.min(constraints.maxHeight * widget.viewportHeightFactor, widget.maxViewportHeight);
+              _viewportSize = Size(viewportWidth, viewportHeight);
+              _anchorWorldY = _Pseudo3DBoardPainter.anchorWorldYForViewport(
+                _viewportSize,
+              );
+              final Offset initialOffset =
+                  _Pseudo3DBoardPainter.initialOffsetForViewport(_viewportSize);
+              if (!_didInitializeBoardOffset) {
+                _didInitializeBoardOffset = true;
+                _boardOffset = initialOffset;
+              }
+              final Offset clampedOffset = _Pseudo3DBoardPainter.clampOffsetForAnchor(
+                _didInitializeBoardOffset ? _boardOffset : initialOffset,
+                anchorWorldY: _anchorWorldY,
+              );
 
-                      return Center(
-                        child: SizedBox(
-                          width: viewportWidth,
-                          height: viewportHeight,
-                          child: CustomPaint(
-                            painter: _Pseudo3DBoardPainter(
-                              boardOffset: clampedOffset,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const Positioned.fill(
-                  child: IgnorePointer(
-                    child: Center(
-                      child: TriangleSoldier(
-                        size: 72,
-                        side: 48,
-                      ),
+              return Center(
+                child: SizedBox(
+                  width: viewportWidth,
+                  height: viewportHeight,
+                  child: CustomPaint(
+                    painter: _Pseudo3DBoardPainter(
+                      boardOffset: clampedOffset,
                     ),
                   ),
                 ),
-                Positioned(
-                  left: 20,
-                  bottom: 20,
-                  child: SafeArea(
-                    child: VirtualJoystick(
-                      outerRadius: 56,
-                      knobRadius: 24,
-                      onChanged: _onJoystickChanged,
-                    ),
-                  ),
-                ),
-              ],
+              );
+            },
+          ),
+        ),
+        Positioned.fill(
+          bottom: widget.boardBottomInset,
+          child: const IgnorePointer(
+            child: Center(
+              child: TriangleSoldier(
+                size: 72,
+                side: 48,
+              ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Pseudo3DBackground extends StatelessWidget {
-  const _Pseudo3DBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            Color(0xFF02040A),
-            Color(0xFF081120),
-            Color(0xFF010208),
-          ],
         ),
-      ),
-      child: CustomPaint(
-        painter: _Pseudo3DStarfieldPainter(),
-      ),
+        if (widget.showJoystick)
+          Positioned(
+            left: widget.joystickLeftInset,
+            bottom: widget.joystickBottomInset,
+            child: VirtualJoystick(
+              outerRadius: 56,
+              knobRadius: 24,
+              onChanged: _onJoystickChanged,
+            ),
+          ),
+      ],
     );
   }
-}
-
-class _Pseudo3DStarfieldPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint faint = Paint()..color = Colors.white.withValues(alpha: 0.28);
-    final Paint mid = Paint()..color = const Color(0xFFB8C7FF).withValues(alpha: 0.45);
-
-    const List<Offset> stars = <Offset>[
-      Offset(0.04, 0.14),
-      Offset(0.1, 0.26),
-      Offset(0.18, 0.12),
-      Offset(0.22, 0.34),
-      Offset(0.3, 0.08),
-      Offset(0.35, 0.2),
-      Offset(0.4, 0.14),
-      Offset(0.48, 0.06),
-      Offset(0.54, 0.18),
-      Offset(0.61, 0.11),
-      Offset(0.67, 0.27),
-      Offset(0.74, 0.08),
-      Offset(0.82, 0.21),
-      Offset(0.9, 0.13),
-      Offset(0.95, 0.3),
-      Offset(0.08, 0.55),
-      Offset(0.16, 0.68),
-      Offset(0.28, 0.6),
-      Offset(0.42, 0.73),
-      Offset(0.56, 0.62),
-      Offset(0.7, 0.75),
-      Offset(0.84, 0.58),
-      Offset(0.92, 0.7),
-    ];
-
-    for (int i = 0; i < stars.length; i++) {
-      final Offset p = Offset(stars[i].dx * size.width, stars[i].dy * size.height);
-      final Paint paint = i.isEven ? faint : mid;
-      final double r = i % 4 == 0 ? 1.5 : 1.0;
-      canvas.drawCircle(p, r, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _Pseudo3DBoardPainter extends CustomPainter {
@@ -256,8 +169,6 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   static const double _focalLength = 420;
   static const double _nearClipZ = 120;
   static const double _hexHalfHeight = _baseRadius * 0.8660254;
-  static final double landExtentX =
-      _baseRadius * (1 + 1.5 * (_landSideHexes - 1));
   static final double landExtentY =
       math.sqrt(3) * _baseRadius * (_landSideHexes - 0.5);
 
@@ -269,10 +180,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     canvas.drawRect(rect, frame);
 
-    final Offset worldOrigin = Offset(
-      boardOffset.dx,
-      boardOffset.dy,
-    );
+    final Offset worldOrigin = Offset(boardOffset.dx, boardOffset.dy);
     final List<_ProjectedHexPolygon> projected = <_ProjectedHexPolygon>[];
 
     for (final Offset localCenter in _landTileCenters) {
@@ -304,22 +212,12 @@ class _Pseudo3DBoardPainter extends CustomPainter {
           ..strokeWidth = math.max(0.9, 2.0 * polygon.strokeScale),
       );
     }
-
   }
 
   _ProjectedHexPolygon? _projectHex(Offset worldCenter, Size size) {
     final _ProjectedPoint center = _projectPoint(worldCenter, size);
-    final List<Offset> localVertices = <Offset>[
-      Offset(_baseRadius, 0),
-      Offset(_baseRadius * 0.5, _baseRadius * 0.8660254),
-      Offset(-_baseRadius * 0.5, _baseRadius * 0.8660254),
-      Offset(-_baseRadius, 0),
-      Offset(-_baseRadius * 0.5, -_baseRadius * 0.8660254),
-      Offset(_baseRadius * 0.5, -_baseRadius * 0.8660254),
-    ];
-
     final List<Offset> projectedVertices = <Offset>[
-      for (final Offset local in localVertices)
+      for (final Offset local in _hexLocalVertices)
         _projectPoint(worldCenter + local, size).screen,
     ];
 
@@ -367,7 +265,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
 
   Color _territoryColor(Offset center) {
     final Offset n = Offset(
-      (center.dx / (landExtentX * 2)) + 0.5,
+      (center.dx / (_landExtentX * 2)) + 0.5,
       (center.dy / (landExtentY * 2)) + 0.5,
     );
 
@@ -496,13 +394,21 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     );
   }
 
-
   @override
   bool shouldRepaint(covariant _Pseudo3DBoardPainter oldDelegate) {
     return oldDelegate.boardOffset != boardOffset;
   }
 
+  static const double _landExtentX = _baseRadius * (1 + 1.5 * (_landSideHexes - 1));
   static final List<Offset> _landTileCenters = _buildLandTileCenters();
+  static const List<Offset> _hexLocalVertices = <Offset>[
+    Offset(_baseRadius, 0),
+    Offset(_baseRadius * 0.5, _hexHalfHeight),
+    Offset(-_baseRadius * 0.5, _hexHalfHeight),
+    Offset(-_baseRadius, 0),
+    Offset(-_baseRadius * 0.5, -_hexHalfHeight),
+    Offset(_baseRadius * 0.5, -_hexHalfHeight),
+  ];
 
   static List<Offset> _buildLandTileCenters() {
     final int radius = _landSideHexes - 1;
@@ -562,4 +468,3 @@ class _ProjectedHexPolygon {
     );
   }
 }
-

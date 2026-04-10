@@ -15,18 +15,6 @@ void main() {
     expect(find.text('War'), findsOneWidget);
     expect(find.text('Shop'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Pseudo3D'), findsOneWidget);
-  });
-
-  testWidgets('Pseudo3D preview opens from main screen', (WidgetTester tester) async {
-    await tester.pumpWidget(const GalacticGameplayApp());
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump();
-
-    await tester.tap(find.text('Pseudo3D'));
-    await tester.pump();
-
-    expect(find.text('Pseudo3D Preview'), findsOneWidget);
-    expect(find.text('Codex'), findsNothing);
+    expect(find.text('Pseudo3D'), findsNothing);
   });
 }
