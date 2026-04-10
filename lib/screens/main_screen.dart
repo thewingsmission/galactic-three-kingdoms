@@ -28,14 +28,14 @@ class MainScreen extends StatelessWidget {
                   child: Pseudo3DScene(
                     meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
                     boardBottomInset: 0,
-                    joystickBottomInset: 138,
+                    joystickBottomInset: 20,
                     viewportHeightFactor: 0.92,
                   ),
                 ),
                 Align(
-                  alignment: Alignment.bottomCenter,
+                  alignment: Alignment.bottomRight,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    padding: const EdgeInsets.fromLTRB(132, 0, 16, 12),
                     child: _BottomRibbon(
                       onOpenDesigns: onOpenDesigns,
                       onOpenInventory: onOpenInventory,
