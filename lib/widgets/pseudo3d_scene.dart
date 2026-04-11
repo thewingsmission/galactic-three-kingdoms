@@ -272,15 +272,8 @@ class _ProductionJollyCircleMarker extends StatelessWidget {
                   width: shadowDiameter,
                   height: shadowDiameter,
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.42),
+                    color: Colors.black,
                     shape: BoxShape.circle,
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 10,
-                        spreadRadius: 3,
-                      ),
-                    ],
                   ),
                 ),
               ),
