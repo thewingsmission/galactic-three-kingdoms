@@ -34,7 +34,6 @@ class _MainScreenState extends State<MainScreen> {
     outerBlur: 2,
     innerBlur: 0,
   );
-  Pseudo3DControlMode _controlMode = Pseudo3DControlMode.joystick;
 
   @override
   Widget build(BuildContext context) {
@@ -50,10 +49,7 @@ class _MainScreenState extends State<MainScreen> {
                   child: Pseudo3DScene(
                     meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
                     boardBottomInset: 0,
-                    joystickBottomInset: 20,
                     viewportHeightFactor: 0.92,
-                    controlMode: _controlMode,
-                    showJoystick: _controlMode == Pseudo3DControlMode.joystick,
                   ),
                 ),
               ],
@@ -72,88 +68,6 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           ),
-          Positioned(
-            top: 16,
-            right: 16,
-            child: SafeArea(
-              bottom: false,
-              child: _ControlModeToggle(
-                selectedMode: _controlMode,
-                onChanged: (Pseudo3DControlMode mode) {
-                  setState(() {
-                    _controlMode = mode;
-                  });
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ControlModeToggle extends StatelessWidget {
-  const _ControlModeToggle({
-    required this.selectedMode,
-    required this.onChanged,
-  });
-
-  final Pseudo3DControlMode selectedMode;
-  final ValueChanged<Pseudo3DControlMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget buildButton(String label, Pseudo3DControlMode mode) {
-      final bool selected = selectedMode == mode;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () => onChanged(mode),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: selected
-                  ? Colors.white.withValues(alpha: 0.18)
-                  : Colors.black.withValues(alpha: 0.24),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: selected ? 0.34 : 0.14),
-              ),
-            ),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      width: 208,
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0C1220).withValues(alpha: 0.84),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.24),
-            blurRadius: 16,
-            spreadRadius: 0,
-          ),
-        ],
-      ),
-      child: Row(
-        children: <Widget>[
-          buildButton('Joystick', Pseudo3DControlMode.joystick),
-          const SizedBox(width: 6),
-          buildButton('Drag', Pseudo3DControlMode.dragAnywhere),
         ],
       ),
     );
@@ -764,13 +678,17 @@ class _BottomRibbon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<_RibbonAction> actions = <_RibbonAction>[
-      _RibbonAction(label: 'War', onTap: onOpenWar),
       _RibbonAction(label: 'Soldier', onTap: onOpenInventory),
+      _RibbonAction(label: 'Atlas', onTap: onOpenDesigns),
       _RibbonAction(
         label: 'Rank',
         onTap: () => _showPlaceholder(context, 'Rank'),
       ),
-      _RibbonAction(label: 'Atlas', onTap: onOpenDesigns),
+      _RibbonAction(label: 'War', onTap: onOpenWar),
+      _RibbonAction(
+        label: 'Achievement',
+        onTap: () => _showPlaceholder(context, 'Achievement'),
+      ),
       _RibbonAction(
         label: 'Shop',
         onTap: () => _showPlaceholder(context, 'Shop'),
@@ -889,12 +807,11 @@ class _BottomRibbon extends StatelessWidget {
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           const double buttonHeight = 81.84;
-          const double rightGap = 37;
-          const double preferredPanelWidth = 569.92;
+          const double preferredPanelWidth = 664.0;
           final double panelWidth =
               math.min(constraints.maxWidth, preferredPanelWidth);
           final double buttonWidth =
-              math.max(0, (panelWidth - rightGap) / 6);
+              math.max(0, panelWidth / actions.length);
           final List<Color> accentColors = <Color>[
             factionTierColor(SoldierDesignPalette.red, 1),
             factionTierColor(SoldierDesignPalette.red, 3),
@@ -902,36 +819,32 @@ class _BottomRibbon extends StatelessWidget {
             factionTierColor(SoldierDesignPalette.yellow, 3),
             factionTierColor(SoldierDesignPalette.blue, 1),
             factionTierColor(SoldierDesignPalette.blue, 3),
-          ];
-          final List<Color> fillColors = <Color>[
-            Colors.white.withValues(alpha: 0.84),
-            Colors.white.withValues(alpha: 0.84),
-            Colors.white.withValues(alpha: 0.84),
-            Colors.white.withValues(alpha: 0.84),
-            Colors.white.withValues(alpha: 0.84),
-            Colors.white.withValues(alpha: 0.84),
+            factionTierColor(SoldierDesignPalette.blue, 4),
           ];
           const List<double> imageDxWidthUnits = <double>[
             0.01,
-            0.01,
             0.00,
+            0.00,
+            0.01,
             0.00,
             0.00,
             0.00,
           ];
           const List<double> imageDyHeightUnits = <double>[
-            0.00,
             0.03,
-            0.00,
             0.01,
+            0.00,
+            0.00,
+            0.00,
             0.02,
             0.00,
           ];
           const List<double> imageScaleRatios = <double>[
-            1.00,
             1.27,
-            1.31,
             0.95,
+            1.31,
+            1.00,
+            1.15,
             0.97,
             1.16,
           ];
@@ -963,7 +876,7 @@ class _BottomRibbon extends StatelessWidget {
               ),
           ];
           return Align(
-            alignment: Alignment.bottomRight,
+            alignment: Alignment.bottomCenter,
             child: Transform.translate(
               offset: const Offset(0, 8.184),
               child: SizedBox(

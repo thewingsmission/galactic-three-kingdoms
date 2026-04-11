@@ -9,33 +9,24 @@ import '../models/soldier_design_palette.dart';
 import '../models/soldier_faction_color_theme.dart';
 import 'multi_polygon_soldier_painter.dart';
 import 'soldier_design_catalog.dart';
-import 'virtual_joystick.dart';
 
 class Pseudo3DScene extends StatefulWidget {
   const Pseudo3DScene({
     super.key,
     this.meshMode = Pseudo3DMeshMode.solid,
     this.boardBottomInset = 0,
-    this.joystickBottomInset = 20,
-    this.joystickLeftInset = 20,
     this.viewportHeightFactor = 0.72,
     this.maxViewportHeight = 540,
     this.viewportWidthFactor = 0.94,
     this.maxViewportWidth = 980,
-    this.showJoystick = true,
-    this.controlMode = Pseudo3DControlMode.joystick,
   });
 
   final Pseudo3DMeshMode meshMode;
   final double boardBottomInset;
-  final double joystickBottomInset;
-  final double joystickLeftInset;
   final double viewportHeightFactor;
   final double maxViewportHeight;
   final double viewportWidthFactor;
   final double maxViewportWidth;
-  final bool showJoystick;
-  final Pseudo3DControlMode controlMode;
 
   @override
   State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
@@ -47,18 +38,13 @@ enum Pseudo3DMeshMode {
   outlineHalfTransparent,
 }
 
-enum Pseudo3DControlMode {
-  joystick,
-  dragAnywhere,
-}
-
 class _Pseudo3DSceneState extends State<Pseudo3DScene>
     with SingleTickerProviderStateMixin {
   static const double _boardMoveSpeed = 220;
   static const double _soldierMotionCycleSeconds = 1.4;
   static const double _soldierAnchorScreenYOffsetFactor = 0.15;
   static const double _markerBoxSize = 84;
-  static const double _dragControlRadius = 110;
+  static const double _touchHoldControlRadius = 110;
   static const double _minZoom = 0.7;
   static const double _maxZoom = 1.8;
   static const double _keyboardZoomStep = 0.08;
@@ -66,14 +52,16 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   late final Ticker _ticker;
   late final FocusNode _keyboardFocusNode;
   Duration? _lastElapsed;
-  Offset _joystick = Offset.zero;
+  Offset _movementVector = Offset.zero;
   Offset _boardOffset = Offset.zero;
   Size _viewportSize = Size.zero;
+  Size _sceneSize = Size.zero;
   double _shadowAnchorWorldY = 0;
   double _soldierMotionT = 0;
   double _zoom = 1;
   double _gestureStartZoom = 1;
   double _latestBoardLayoutHeight = 0;
+  int _activePointerCount = 0;
   bool _didInitializeBoardOffset = false;
 
   @override
@@ -104,10 +92,10 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     setState(() {
       _soldierMotionT = nextMotionT;
 
-      if (_joystick != Offset.zero && mounted) {
+      if (_movementVector != Offset.zero && mounted) {
         final Offset proposed = _boardOffset.translate(
-          -_joystick.dx * _boardMoveSpeed * dt,
-          _joystick.dy * _boardMoveSpeed * dt,
+          -_movementVector.dx * _boardMoveSpeed * dt,
+          _movementVector.dy * _boardMoveSpeed * dt,
         );
         if (_viewportSize != Size.zero) {
           _boardOffset = _Pseudo3DBoardPainter.clampOffsetForLocalAnchor(
@@ -124,20 +112,16 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     });
   }
 
-  void _onJoystickChanged(Offset value) {
-    setState(() => _joystick = value);
+  void _beginTouchHoldMovement(Offset localPosition, Size size) {
+    _updateTouchHoldVector(localPosition, size);
   }
 
-  void _onDragStart(Offset localPosition, Size size) {
-    _updateDragVector(localPosition, size);
+  void _updateTouchHoldMovement(Offset localPosition, Size size) {
+    _updateTouchHoldVector(localPosition, size);
   }
 
-  void _onDragUpdate(Offset localPosition, Size size) {
-    _updateDragVector(localPosition, size);
-  }
-
-  void _onDragEnd() {
-    setState(() => _joystick = Offset.zero);
+  void _endTouchHoldMovement() {
+    setState(() => _movementVector = Offset.zero);
   }
 
   void _onScaleStart(ScaleStartDetails details) {
@@ -145,20 +129,38 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details, Size size) {
-    final bool isPinchZoom = (details.scale - 1).abs() > 0.01;
+    final bool isPinchZoom =
+        _activePointerCount >= 2 && (details.scale - 1).abs() > 0.01;
     if (isPinchZoom) {
       _setZoom(_gestureStartZoom * details.scale);
-      return;
-    }
-
-    if (widget.controlMode == Pseudo3DControlMode.dragAnywhere) {
-      _updateDragVector(details.localFocalPoint, size);
     }
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
-    if (widget.controlMode == Pseudo3DControlMode.dragAnywhere) {
-      _onDragEnd();
+    if (_activePointerCount == 0) {
+      _endTouchHoldMovement();
+    }
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    _activePointerCount += 1;
+    if (_activePointerCount == 1) {
+      _beginTouchHoldMovement(event.localPosition, _sceneSize);
+    } else {
+      _endTouchHoldMovement();
+    }
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (_activePointerCount == 1) {
+      _updateTouchHoldMovement(event.localPosition, _sceneSize);
+    }
+  }
+
+  void _onPointerEnd() {
+    _activePointerCount = math.max(0, _activePointerCount - 1);
+    if (_activePointerCount == 0) {
+      _endTouchHoldMovement();
     }
   }
 
@@ -224,18 +226,31 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     return KeyEventResult.ignored;
   }
 
-  void _updateDragVector(Offset localPosition, Size size) {
-    final Offset center = Offset(size.width / 2, size.height / 2);
-    Offset delta = localPosition - center;
-    if (delta.distance > _dragControlRadius && delta.distance > 0) {
-      delta = delta * (_dragControlRadius / delta.distance);
+  void _updateTouchHoldVector(Offset localPosition, Size size) {
+    final Offset shadowCenter = _shadowCenterInScene(size);
+    Offset delta = localPosition - shadowCenter;
+    if (delta.distance > _touchHoldControlRadius && delta.distance > 0) {
+      delta = delta * (_touchHoldControlRadius / delta.distance);
     }
     setState(() {
-      _joystick = Offset(
-        delta.dx / _dragControlRadius,
-        delta.dy / _dragControlRadius,
+      _movementVector = Offset(
+        delta.dx / _touchHoldControlRadius,
+        delta.dy / _touchHoldControlRadius,
       );
     });
+  }
+
+  Offset _shadowCenterInScene(Size size) {
+    final double totalScreenHeight = size.height + widget.boardBottomInset;
+    return Offset(
+      size.width / 2,
+      totalScreenHeight / 2 +
+          totalScreenHeight * _soldierAnchorScreenYOffsetFactor +
+          _ProductionJollyCircleMarker.shadowCenterOffsetFromMarkerCenter(
+                _markerBoxSize,
+              ) *
+              _zoom,
+    );
   }
 
   @override
@@ -341,16 +356,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
             ),
           ),
         ),
-        if (widget.showJoystick && widget.controlMode == Pseudo3DControlMode.joystick)
-          Positioned(
-            left: widget.joystickLeftInset,
-            bottom: widget.joystickBottomInset,
-            child: VirtualJoystick(
-              outerRadius: 56,
-              knobRadius: 24,
-              onChanged: _onJoystickChanged,
-            ),
-          ),
       ],
     );
 
@@ -361,18 +366,31 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           final Size size = Size(constraints.maxWidth, constraints.maxHeight);
-          return GestureDetector(
+          _sceneSize = size;
+          return Listener(
             behavior: HitTestBehavior.translucent,
-            onTap: () {
+            onPointerDown: (PointerDownEvent event) {
               if (!_keyboardFocusNode.hasFocus) {
                 _keyboardFocusNode.requestFocus();
               }
+              _onPointerDown(event);
             },
-            onScaleStart: _onScaleStart,
-            onScaleUpdate: (ScaleUpdateDetails details) =>
-                _onScaleUpdate(details, size),
-            onScaleEnd: _onScaleEnd,
-            child: sceneStack,
+            onPointerMove: _onPointerMove,
+            onPointerUp: (_) => _onPointerEnd(),
+            onPointerCancel: (_) => _onPointerEnd(),
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                if (!_keyboardFocusNode.hasFocus) {
+                  _keyboardFocusNode.requestFocus();
+                }
+              },
+              onScaleStart: _onScaleStart,
+              onScaleUpdate: (ScaleUpdateDetails details) =>
+                  _onScaleUpdate(details, size),
+              onScaleEnd: _onScaleEnd,
+              child: sceneStack,
+            ),
           );
         },
       ),
