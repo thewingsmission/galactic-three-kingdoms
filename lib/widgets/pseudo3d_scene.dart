@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import '../models/soldier_design.dart';
 import '../models/soldier_design_palette.dart';
@@ -22,6 +23,7 @@ class Pseudo3DScene extends StatefulWidget {
     this.viewportWidthFactor = 0.94,
     this.maxViewportWidth = 980,
     this.showJoystick = true,
+    this.controlMode = Pseudo3DControlMode.joystick,
   });
 
   final Pseudo3DMeshMode meshMode;
@@ -33,6 +35,7 @@ class Pseudo3DScene extends StatefulWidget {
   final double viewportWidthFactor;
   final double maxViewportWidth;
   final bool showJoystick;
+  final Pseudo3DControlMode controlMode;
 
   @override
   State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
@@ -44,25 +47,39 @@ enum Pseudo3DMeshMode {
   outlineHalfTransparent,
 }
 
+enum Pseudo3DControlMode {
+  joystick,
+  dragAnywhere,
+}
+
 class _Pseudo3DSceneState extends State<Pseudo3DScene>
     with SingleTickerProviderStateMixin {
   static const double _boardMoveSpeed = 220;
   static const double _soldierMotionCycleSeconds = 1.4;
   static const double _soldierAnchorScreenYOffsetFactor = 0.15;
-  static const double _markerBoxSize = 120;
+  static const double _markerBoxSize = 84;
+  static const double _dragControlRadius = 110;
+  static const double _minZoom = 0.7;
+  static const double _maxZoom = 1.8;
+  static const double _keyboardZoomStep = 0.08;
 
   late final Ticker _ticker;
+  late final FocusNode _keyboardFocusNode;
   Duration? _lastElapsed;
   Offset _joystick = Offset.zero;
   Offset _boardOffset = Offset.zero;
   Size _viewportSize = Size.zero;
   double _shadowAnchorWorldY = 0;
   double _soldierMotionT = 0;
+  double _zoom = 1;
+  double _gestureStartZoom = 1;
+  double _latestBoardLayoutHeight = 0;
   bool _didInitializeBoardOffset = false;
 
   @override
   void initState() {
     super.initState();
+    _keyboardFocusNode = FocusNode(debugLabel: 'Pseudo3DSceneKeyboardFocus');
     _ticker = createTicker(_tick)..start();
   }
 
@@ -98,6 +115,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
             proposedOffset: proposed,
             anchorWorldY: _shadowAnchorWorldY,
             hexGap: 0,
+            zoom: _zoom,
           );
         } else {
           _boardOffset = proposed;
@@ -110,20 +128,132 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     setState(() => _joystick = value);
   }
 
+  void _onDragStart(Offset localPosition, Size size) {
+    _updateDragVector(localPosition, size);
+  }
+
+  void _onDragUpdate(Offset localPosition, Size size) {
+    _updateDragVector(localPosition, size);
+  }
+
+  void _onDragEnd() {
+    setState(() => _joystick = Offset.zero);
+  }
+
+  void _onScaleStart(ScaleStartDetails details) {
+    _gestureStartZoom = _zoom;
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details, Size size) {
+    final bool isPinchZoom = (details.scale - 1).abs() > 0.01;
+    if (isPinchZoom) {
+      _setZoom(_gestureStartZoom * details.scale);
+      return;
+    }
+
+    if (widget.controlMode == Pseudo3DControlMode.dragAnywhere) {
+      _updateDragVector(details.localFocalPoint, size);
+    }
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) {
+    if (widget.controlMode == Pseudo3DControlMode.dragAnywhere) {
+      _onDragEnd();
+    }
+  }
+
+  void _setZoom(double value) {
+    final double clampedZoom = value.clamp(_minZoom, _maxZoom);
+    if ((clampedZoom - _zoom).abs() < 1e-6) {
+      return;
+    }
+    setState(() {
+      final Offset currentLocalAnchor = Offset(
+        -_boardOffset.dx,
+        _shadowAnchorWorldY - _boardOffset.dy,
+      );
+      _zoom = clampedZoom;
+      if (_viewportSize != Size.zero && _latestBoardLayoutHeight > 0) {
+        final double totalScreenHeight =
+            _latestBoardLayoutHeight + widget.boardBottomInset;
+        final double shadowCenterScreenY =
+            totalScreenHeight / 2 +
+            totalScreenHeight * _soldierAnchorScreenYOffsetFactor +
+            _ProductionJollyCircleMarker.shadowCenterOffsetFromMarkerCenter(
+                  _markerBoxSize,
+                ) *
+                _zoom;
+        final double viewportTop = (_latestBoardLayoutHeight - _viewportSize.height) / 2;
+        final double shadowCenterViewportY = shadowCenterScreenY - viewportTop;
+        _shadowAnchorWorldY = _Pseudo3DBoardPainter.anchorWorldYForViewport(
+          _viewportSize,
+          targetScreenY: shadowCenterViewportY,
+          hexGap: 0,
+          zoom: _zoom,
+        );
+        _boardOffset = Offset(
+          -currentLocalAnchor.dx,
+          _shadowAnchorWorldY - currentLocalAnchor.dy,
+        );
+        _boardOffset = _Pseudo3DBoardPainter.clampOffsetForLocalAnchor(
+          currentOffset: _boardOffset,
+          proposedOffset: _boardOffset,
+          anchorWorldY: _shadowAnchorWorldY,
+          hexGap: 0,
+          zoom: _zoom,
+        );
+      }
+    });
+  }
+
+  KeyEventResult _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.minus ||
+        event.logicalKey == LogicalKeyboardKey.numpadSubtract) {
+      _setZoom(_zoom - _keyboardZoomStep);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.equal ||
+        event.logicalKey == LogicalKeyboardKey.numpadAdd ||
+        event.logicalKey == LogicalKeyboardKey.add) {
+      _setZoom(_zoom + _keyboardZoomStep);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _updateDragVector(Offset localPosition, Size size) {
+    final Offset center = Offset(size.width / 2, size.height / 2);
+    Offset delta = localPosition - center;
+    if (delta.distance > _dragControlRadius && delta.distance > 0) {
+      delta = delta * (_dragControlRadius / delta.distance);
+    }
+    setState(() {
+      _joystick = Offset(
+        delta.dx / _dragControlRadius,
+        delta.dy / _dragControlRadius,
+      );
+    });
+  }
+
   @override
   void dispose() {
+    _keyboardFocusNode.dispose();
     _ticker.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    final Widget sceneStack = Stack(
       children: <Widget>[
         Positioned.fill(
           bottom: widget.boardBottomInset,
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
+              _latestBoardLayoutHeight = constraints.maxHeight;
               final double viewportWidth =
                   math.min(constraints.maxWidth * widget.viewportWidthFactor, widget.maxViewportWidth);
               final double viewportHeight =
@@ -136,7 +266,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                   totalScreenHeight * _soldierAnchorScreenYOffsetFactor +
                   _ProductionJollyCircleMarker.shadowCenterOffsetFromMarkerCenter(
                     _markerBoxSize,
-                  );
+                  ) * _zoom;
               final double viewportTop =
                   (constraints.maxHeight - viewportHeight) / 2;
               final double shadowCenterViewportY =
@@ -146,12 +276,14 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                 _viewportSize,
                 targetScreenY: shadowCenterViewportY,
                 hexGap: 0,
+                zoom: _zoom,
               );
               final Offset initialOffset =
                   _Pseudo3DBoardPainter.initialOffsetForViewport(
                 _viewportSize,
                 targetScreenY: shadowCenterViewportY,
                 hexGap: 0,
+                zoom: _zoom,
               );
               if (!_didInitializeBoardOffset) {
                 _didInitializeBoardOffset = true;
@@ -162,6 +294,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                 proposedOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
                 anchorWorldY: _shadowAnchorWorldY,
                 hexGap: 0,
+                zoom: _zoom,
               );
               _boardOffset = clampedOffset;
 
@@ -173,6 +306,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                     painter: _Pseudo3DBoardPainter(
                       boardOffset: clampedOffset,
                       meshMode: widget.meshMode,
+                      zoom: _zoom,
                     ),
                   ),
                 ),
@@ -190,11 +324,15 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                       0,
                       constraints.maxHeight * _soldierAnchorScreenYOffsetFactor,
                     ),
-                    child: SizedBox(
-                      width: _markerBoxSize,
-                      height: _markerBoxSize,
-                      child: _ProductionJollyCircleMarker(
-                        motionT: _soldierMotionT,
+                    child: Transform.scale(
+                      scale: _zoom,
+                      alignment: Alignment.center,
+                      child: SizedBox(
+                        width: _markerBoxSize,
+                        height: _markerBoxSize,
+                        child: _ProductionJollyCircleMarker(
+                          motionT: _soldierMotionT,
+                        ),
                       ),
                     ),
                   ),
@@ -203,7 +341,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
             ),
           ),
         ),
-        if (widget.showJoystick)
+        if (widget.showJoystick && widget.controlMode == Pseudo3DControlMode.joystick)
           Positioned(
             left: widget.joystickLeftInset,
             bottom: widget.joystickBottomInset,
@@ -214,6 +352,30 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
             ),
           ),
       ],
+    );
+
+    return Focus(
+      autofocus: true,
+      focusNode: _keyboardFocusNode,
+      onKeyEvent: (_, KeyEvent event) => _handleKeyEvent(event),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final Size size = Size(constraints.maxWidth, constraints.maxHeight);
+          return GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              if (!_keyboardFocusNode.hasFocus) {
+                _keyboardFocusNode.requestFocus();
+              }
+            },
+            onScaleStart: _onScaleStart,
+            onScaleUpdate: (ScaleUpdateDetails details) =>
+                _onScaleUpdate(details, size),
+            onScaleEnd: _onScaleEnd,
+            child: sceneStack,
+          );
+        },
+      ),
     );
   }
 }
@@ -343,10 +505,12 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   _Pseudo3DBoardPainter({
     required this.boardOffset,
     required this.meshMode,
+    required this.zoom,
   });
 
   final Offset boardOffset;
   final Pseudo3DMeshMode meshMode;
+  final double zoom;
   static const double _fixedInnerTransparency = 0.9;
   static const double _fixedInnerScale = 0.847;
 
@@ -421,15 +585,24 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   }
 
   _ProjectedHexPolygon? _projectHex(Offset worldCenter, Size size) {
-    return _projectHexStatic(worldCenter, size);
+    return _projectHexStatic(worldCenter, size, zoom: zoom);
   }
 
-  static _ProjectedHexPolygon? _projectHexStatic(Offset worldCenter, Size size) {
+  static _ProjectedHexPolygon? _projectHexStatic(
+    Offset worldCenter,
+    Size size, {
+    required double zoom,
+  }) {
     final _ProjectedPoint center =
-        _projectPointStatic(worldCenter.dx, worldCenter.dy, size);
+        _projectPointStatic(worldCenter.dx, worldCenter.dy, size, zoom: zoom);
     final List<Offset> projectedVertices = <Offset>[
       for (final Offset local in _hexLocalVertices)
-        _projectPointStatic(worldCenter.dx + local.dx, worldCenter.dy + local.dy, size).screen,
+        _projectPointStatic(
+          worldCenter.dx + local.dx,
+          worldCenter.dy + local.dy,
+          size,
+          zoom: zoom,
+        ).screen,
     ];
 
     final Path path = Path()
@@ -462,15 +635,20 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   }
 
   _ProjectedPoint _projectPoint(Offset world, Size size) {
-    return _projectPointStatic(world.dx, world.dy, size);
+    return _projectPointStatic(world.dx, world.dy, size, zoom: zoom);
   }
 
   static _ProjectedPoint _projectPointStatic(
     double worldX,
     double worldY,
     Size size,
+    {
+    required double zoom,
+  }
   ) {
-    final double zPlane = worldY + _planeDepthOffset;
+    final double scaledWorldX = worldX * zoom;
+    final double scaledWorldY = worldY * zoom;
+    final double zPlane = scaledWorldY + _planeDepthOffset;
     final double cosPitch = math.cos(_cameraPitch);
     final double sinPitch = math.sin(_cameraPitch);
 
@@ -479,7 +657,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     final double safeZ = math.max(rotatedZ, _nearClipZ);
     final double scale = _focalLength / safeZ;
 
-    final double screenX = size.width / 2 + worldX * scale;
+    final double screenX = size.width / 2 + scaledWorldX * scale;
     final double screenY = size.height * 1.02 - rotatedY * scale;
     return _ProjectedPoint(
       screen: Offset(screenX, screenY),
@@ -538,6 +716,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     Size viewport, {
     double? targetScreenY,
     double hexGap = 0,
+    double zoom = 1,
   }) {
     if (viewport == Size.zero) return Offset.zero;
     return Offset(
@@ -546,6 +725,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         viewport,
         targetScreenY: targetScreenY,
         hexGap: hexGap,
+        zoom: zoom,
       ),
     );
   }
@@ -554,16 +734,18 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     Size viewport, {
     double? targetScreenY,
     double hexGap = 0,
+    double zoom = 1,
   }) {
     final double targetY = targetScreenY ?? viewport.height / 2;
     double low = -landExtentY;
     double high = landExtentY;
     final bool increasing =
-        _projectScreenYForWorldY(high, viewport) > _projectScreenYForWorldY(low, viewport);
+        _projectScreenYForWorldY(high, viewport, zoom: zoom) >
+        _projectScreenYForWorldY(low, viewport, zoom: zoom);
 
     for (int i = 0; i < 28; i++) {
       final double mid = (low + high) / 2;
-      final double value = _projectScreenYForWorldY(mid, viewport);
+      final double value = _projectScreenYForWorldY(mid, viewport, zoom: zoom);
       if ((value < targetY) == increasing) {
         low = mid;
       } else {
@@ -574,12 +756,20 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     return (low + high) / 2;
   }
 
-  static double _projectScreenYForWorldY(double worldY, Size viewport) {
-    return _projectPointStatic(0, worldY, viewport).screen.dy;
+  static double _projectScreenYForWorldY(
+    double worldY,
+    Size viewport, {
+    double zoom = 1,
+  }) {
+    return _projectPointStatic(0, worldY, viewport, zoom: zoom).screen.dy;
   }
 
-  static double projectScreenYForWorldY(double worldY, Size viewport) {
-    return _projectScreenYForWorldY(worldY, viewport);
+  static double projectScreenYForWorldY(
+    double worldY,
+    Size viewport, {
+    double zoom = 1,
+  }) {
+    return _projectScreenYForWorldY(worldY, viewport, zoom: zoom);
   }
 
   static Offset clampOffsetForLocalAnchor({
@@ -587,6 +777,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     required Offset proposedOffset,
     required double anchorWorldY,
     double hexGap = 0,
+    double zoom = 1,
   }) {
     final Offset currentAnchorLocal =
         Offset(-currentOffset.dx, anchorWorldY - currentOffset.dy);
@@ -751,7 +942,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _Pseudo3DBoardPainter oldDelegate) {
     return oldDelegate.boardOffset != boardOffset ||
-        oldDelegate.meshMode != meshMode;
+        oldDelegate.meshMode != meshMode ||
+        oldDelegate.zoom != zoom;
   }
 
   static const double _landExtentX = _baseRadius * (1 + 1.5 * (_landSideHexes - 1));

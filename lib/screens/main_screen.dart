@@ -34,6 +34,7 @@ class _MainScreenState extends State<MainScreen> {
     outerBlur: 2,
     innerBlur: 0,
   );
+  Pseudo3DControlMode _controlMode = Pseudo3DControlMode.joystick;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +52,8 @@ class _MainScreenState extends State<MainScreen> {
                     boardBottomInset: 0,
                     joystickBottomInset: 20,
                     viewportHeightFactor: 0.92,
+                    controlMode: _controlMode,
+                    showJoystick: _controlMode == Pseudo3DControlMode.joystick,
                   ),
                 ),
               ],
@@ -69,6 +72,88 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           ),
+          Positioned(
+            top: 16,
+            right: 16,
+            child: SafeArea(
+              bottom: false,
+              child: _ControlModeToggle(
+                selectedMode: _controlMode,
+                onChanged: (Pseudo3DControlMode mode) {
+                  setState(() {
+                    _controlMode = mode;
+                  });
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ControlModeToggle extends StatelessWidget {
+  const _ControlModeToggle({
+    required this.selectedMode,
+    required this.onChanged,
+  });
+
+  final Pseudo3DControlMode selectedMode;
+  final ValueChanged<Pseudo3DControlMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget buildButton(String label, Pseudo3DControlMode mode) {
+      final bool selected = selectedMode == mode;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => onChanged(mode),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: selected
+                  ? Colors.white.withValues(alpha: 0.18)
+                  : Colors.black.withValues(alpha: 0.24),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: selected ? 0.34 : 0.14),
+              ),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: 208,
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0C1220).withValues(alpha: 0.84),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.24),
+            blurRadius: 16,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Row(
+        children: <Widget>[
+          buildButton('Joystick', Pseudo3DControlMode.joystick),
+          const SizedBox(width: 6),
+          buildButton('Drag', Pseudo3DControlMode.dragAnywhere),
         ],
       ),
     );
