@@ -879,13 +879,16 @@ class _BottomRibbon extends StatelessWidget {
           ];
           return Align(
             alignment: Alignment.bottomRight,
-            child: SizedBox(
-              width: panelWidth,
-              height: buttonHeight,
-              child: _PolygonRibbonPanel(
-                specs: specs,
-                labelStyle: labelStyle,
-                panelSize: Size(panelWidth, buttonHeight),
+            child: Transform.translate(
+              offset: const Offset(0, 8.184),
+              child: SizedBox(
+                width: panelWidth,
+                height: buttonHeight,
+                child: _PolygonRibbonPanel(
+                  specs: specs,
+                  labelStyle: labelStyle,
+                  panelSize: Size(panelWidth, buttonHeight),
+                ),
               ),
             ),
           );
@@ -1761,6 +1764,7 @@ class _PolygonRibbonPanelState extends State<_PolygonRibbonPanel>
   double _pressElapsedSeconds = 0;
 
   static const double _pressGlowSpeed = 220;
+  static const double _pressScaleSpeed = 1.6;
 
   @override
   void initState() {
@@ -1918,8 +1922,10 @@ class _PolygonRibbonPanelState extends State<_PolygonRibbonPanel>
           devicePixelRatio: MediaQuery.of(context).devicePixelRatio,
           imagesByAssetPath: _imagesByAssetPath,
           pressedIndex: _isPointerInsidePressedButton ? _pressedIndex : null,
-          pressedGlowRadius:
-              _isPointerInsidePressedButton ? _pressGlowSpeed * _pressElapsedSeconds : 0,
+          pressedScale:
+              _isPointerInsidePressedButton
+                  ? math.min(1.3, 1 + _pressScaleSpeed * _pressElapsedSeconds)
+                  : 1,
         ),
       ),
     );
@@ -1934,7 +1940,7 @@ class _PolygonRibbonPainter extends CustomPainter {
     required this.devicePixelRatio,
     required this.imagesByAssetPath,
     required this.pressedIndex,
-    required this.pressedGlowRadius,
+    required this.pressedScale,
   });
 
   final List<_RibbonPolygonButtonSpec> specs;
@@ -1943,7 +1949,7 @@ class _PolygonRibbonPainter extends CustomPainter {
   final double devicePixelRatio;
   final Map<String, ui.Image> imagesByAssetPath;
   final int? pressedIndex;
-  final double pressedGlowRadius;
+  final double pressedScale;
 
   Path _buildHexagonPath(Offset center, double radius) {
     final Path path = Path();
@@ -1986,41 +1992,6 @@ class _PolygonRibbonPainter extends CustomPainter {
       final double maxY = spec.polygon.map((Offset p) => p.dy).reduce(math.max);
       final Rect bounds = Rect.fromLTRB(minX, minY, maxX, maxY);
 
-      if (pressedIndex == index) {
-        final Offset glowCenter = Offset(bounds.center.dx, bounds.top + bounds.height * 0.44);
-        final double glowRadius = pressedGlowRadius;
-        final double fullFillThreshold = spec.polygon
-            .map((Offset vertex) => (vertex - glowCenter).distance)
-            .reduce(math.max);
-        canvas.save();
-        canvas.clipPath(path);
-        if (glowRadius > 0) {
-          if (glowRadius >= fullFillThreshold) {
-            canvas.drawPath(
-              path,
-              Paint()..color = spec.accentColor.withValues(alpha: 0.6),
-            );
-          } else {
-            canvas.drawCircle(
-              glowCenter,
-              glowRadius,
-              Paint()
-                ..shader = ui.Gradient.radial(
-                  glowCenter,
-                  glowRadius,
-                  <Color>[
-                    spec.accentColor.withValues(alpha: 1),
-                    spec.accentColor.withValues(alpha: 0.6),
-                    spec.accentColor.withValues(alpha: 0),
-                  ],
-                  <double>[0, 0.72, 1],
-                ),
-            );
-          }
-        }
-        canvas.restore();
-      }
-
       final ui.Image? image = imagesByAssetPath[spec.assetPath];
       if (image != null) {
         final Rect contentRect = Rect.fromLTRB(
@@ -2054,6 +2025,17 @@ class _PolygonRibbonPainter extends CustomPainter {
         final Offset imageGlowCenter = contentRect.center;
         final double imageGlowRadius =
             math.max(contentRect.width, contentRect.height) * 0.84 * 0.78;
+        final Offset glowPivot = Offset(
+          bounds.center.dx,
+          imageGlowCenter.dy + imageGlowRadius * 0.61,
+        );
+        final double effectiveScale = pressedIndex == index ? pressedScale : 1;
+        Matrix4 pivotScaleMatrix(Offset pivot, double scale) {
+          return Matrix4.identity()
+            ..translate(pivot.dx, pivot.dy)
+            ..scale(scale, scale)
+            ..translate(-pivot.dx, -pivot.dy);
+        }
         final Path outerHexGlow = _buildHexagonPath(
           imageGlowCenter,
           imageGlowRadius * 0.71,
@@ -2062,6 +2044,8 @@ class _PolygonRibbonPainter extends CustomPainter {
           imageGlowCenter,
           imageGlowRadius * 0.61,
         );
+        canvas.save();
+        canvas.transform(pivotScaleMatrix(glowPivot, effectiveScale).storage);
         canvas.drawPath(
           outerHexGlow,
           Paint()
@@ -2074,8 +2058,10 @@ class _PolygonRibbonPainter extends CustomPainter {
             ..color = Colors.white.withValues(alpha: 0.74)
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0),
         );
+        canvas.restore();
         canvas.save();
         canvas.clipPath(path);
+        canvas.transform(pivotScaleMatrix(glowPivot, effectiveScale).storage);
         canvas.drawImageRect(
           image,
           inputSubrect,
@@ -2096,7 +2082,7 @@ class _PolygonRibbonPainter extends CustomPainter {
         oldDelegate.devicePixelRatio != devicePixelRatio ||
         oldDelegate.imagesByAssetPath != imagesByAssetPath ||
         oldDelegate.pressedIndex != pressedIndex ||
-        oldDelegate.pressedGlowRadius != pressedGlowRadius;
+        oldDelegate.pressedScale != pressedScale;
   }
 }
 
