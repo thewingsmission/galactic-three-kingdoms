@@ -26,7 +26,14 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  double _buttonFillAlpha = 1;
+  static const _HexGlowConfig _hexGlowConfig = _HexGlowConfig(
+    outerRadiusScale: 0.71,
+    innerRadiusScale: 0.61,
+    outerOpacity: 0.54,
+    innerOpacity: 0.74,
+    outerBlur: 2,
+    innerBlur: 0,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -56,23 +63,10 @@ class _MainScreenState extends State<MainScreen> {
               width: MediaQuery.of(context).size.width,
               child: _BottomRibbon(
                 designIndex: 0,
-                buttonFillAlpha: _buttonFillAlpha,
                 onOpenDesigns: widget.onOpenDesigns,
                 onOpenInventory: widget.onOpenInventory,
                 onOpenWar: widget.onOpenWar,
               ),
-            ),
-          ),
-          Positioned(
-            top: 20,
-            right: 16,
-            child: _ButtonTransparencySliderCard(
-              value: _buttonFillAlpha,
-              onChanged: (double value) {
-                setState(() {
-                  _buttonFillAlpha = value;
-                });
-              },
             ),
           ),
         ],
@@ -666,14 +660,12 @@ const List<_GalaxyBackgroundSpec> _galaxyBackgroundSpecs = <_GalaxyBackgroundSpe
 class _BottomRibbon extends StatelessWidget {
   const _BottomRibbon({
     required this.designIndex,
-    required this.buttonFillAlpha,
     required this.onOpenDesigns,
     required this.onOpenInventory,
     required this.onOpenWar,
   });
 
   final int designIndex;
-  final double buttonFillAlpha;
   final VoidCallback onOpenDesigns;
   final VoidCallback onOpenInventory;
   final VoidCallback onOpenWar;
@@ -812,25 +804,12 @@ class _BottomRibbon extends StatelessWidget {
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           const double buttonHeight = 81.84;
-          const double slantInset = 14.5;
-          final double panelWidth = math.min(constraints.maxWidth, 560);
-          final double bottomUnit = panelWidth / 6.305;
-          final List<double> bottomWidths = <double>[
-            bottomUnit,
-            bottomUnit,
-            bottomUnit,
-            bottomUnit,
-            bottomUnit,
-            bottomUnit * 1.305,
-          ];
-          final List<double> buttonWidths = <double>[
-            bottomUnit + slantInset,
-            bottomUnit + slantInset,
-            bottomUnit + slantInset,
-            bottomUnit + slantInset,
-            bottomUnit + slantInset,
-            bottomUnit * 1.305,
-          ];
+          const double rightGap = 37;
+          const double preferredPanelWidth = 569.92;
+          final double panelWidth =
+              math.min(constraints.maxWidth, preferredPanelWidth);
+          final double buttonWidth =
+              math.max(0, (panelWidth - rightGap) / 6);
           final List<Color> accentColors = <Color>[
             factionTierColor(SoldierDesignPalette.red, 1),
             factionTierColor(SoldierDesignPalette.red, 3),
@@ -840,18 +819,42 @@ class _BottomRibbon extends StatelessWidget {
             factionTierColor(SoldierDesignPalette.blue, 3),
           ];
           final List<Color> fillColors = <Color>[
-            Colors.white.withValues(alpha: buttonFillAlpha),
-            Colors.white.withValues(alpha: buttonFillAlpha),
-            Colors.white.withValues(alpha: buttonFillAlpha),
-            Colors.white.withValues(alpha: buttonFillAlpha),
-            Colors.white.withValues(alpha: buttonFillAlpha),
-            Colors.white.withValues(alpha: buttonFillAlpha),
+            Colors.white.withValues(alpha: 0.84),
+            Colors.white.withValues(alpha: 0.84),
+            Colors.white.withValues(alpha: 0.84),
+            Colors.white.withValues(alpha: 0.84),
+            Colors.white.withValues(alpha: 0.84),
+            Colors.white.withValues(alpha: 0.84),
+          ];
+          const List<double> imageDxWidthUnits = <double>[
+            0.01,
+            0.01,
+            0.00,
+            0.00,
+            0.00,
+            0.00,
+          ];
+          const List<double> imageDyHeightUnits = <double>[
+            0.00,
+            0.03,
+            0.00,
+            0.01,
+            0.02,
+            0.00,
+          ];
+          const List<double> imageScaleRatios = <double>[
+            1.00,
+            1.27,
+            1.31,
+            0.95,
+            0.97,
+            1.16,
           ];
           final List<double> buttonLefts = <double>[];
           double currentLeft = 0;
-          for (final double bottomWidth in bottomWidths) {
+          for (int index = 0; index < actions.length; index++) {
             buttonLefts.add(currentLeft);
-            currentLeft += bottomWidth;
+            currentLeft += buttonWidth;
           }
           final List<_RibbonPolygonButtonSpec> specs = <_RibbonPolygonButtonSpec>[
             for (int index = 0; index < actions.length; index++)
@@ -861,17 +864,17 @@ class _BottomRibbon extends StatelessWidget {
                 assetPath:
                     'image/button_${actions[index].label.toLowerCase()}.png',
                 polygon: <Offset>[
-                  Offset(buttonLefts[index] + slantInset, 0),
-                  Offset(buttonLefts[index] + buttonWidths[index], 0),
-                  Offset(
-                    buttonLefts[index] + buttonWidths[index] - (index == actions.length - 1 ? 0 : slantInset),
-                    buttonHeight,
-                  ),
+                  Offset(buttonLefts[index], 0),
+                  Offset(buttonLefts[index] + buttonWidth, 0),
+                  Offset(buttonLefts[index] + buttonWidth, buttonHeight),
                   Offset(buttonLefts[index], buttonHeight),
                 ],
                 accentColor: accentColors[index],
-                fill: fillColors[index],
-                border: Colors.black.withValues(alpha: 0.18),
+                fill: Colors.transparent,
+                border: Colors.transparent,
+                imageDeltaXWidthUnits: imageDxWidthUnits[index],
+                imageDeltaYHeightUnits: imageDyHeightUnits[index],
+                imageScaleRatio: imageScaleRatios[index],
               ),
           ];
           return Align(
@@ -1654,79 +1657,38 @@ class _ActionTile extends StatelessWidget {
   }
 }
 
-class _ButtonTransparencySliderCard extends StatelessWidget {
-  const _ButtonTransparencySliderCard({
-    required this.value,
-    required this.onChanged,
+class _HexGlowConfig {
+  const _HexGlowConfig({
+    this.outerRadiusScale = 0.98,
+    this.innerRadiusScale = 0.72,
+    this.outerOpacity = 0.85,
+    this.innerOpacity = 1,
+    this.outerBlur = 5,
+    this.innerBlur = 2,
   });
 
-  final double value;
-  final ValueChanged<double> onChanged;
+  final double outerRadiusScale;
+  final double innerRadiusScale;
+  final double outerOpacity;
+  final double innerOpacity;
+  final double outerBlur;
+  final double innerBlur;
 
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: 172,
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0C1220).withValues(alpha: 0.84),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.28),
-              blurRadius: 18,
-              spreadRadius: 0,
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    'Button alpha',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.3,
-                        ),
-                  ),
-                ),
-                Text(
-                  value.toStringAsFixed(2),
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.88),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-              ],
-            ),
-            SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-              ),
-              child: Slider(
-                value: value,
-                min: 0,
-                max: 1,
-                divisions: 100,
-                label: value.toStringAsFixed(2),
-                onChanged: onChanged,
-              ),
-            ),
-          ],
-        ),
-      ),
+  _HexGlowConfig copyWith({
+    double? outerRadiusScale,
+    double? innerRadiusScale,
+    double? outerOpacity,
+    double? innerOpacity,
+    double? outerBlur,
+    double? innerBlur,
+  }) {
+    return _HexGlowConfig(
+      outerRadiusScale: outerRadiusScale ?? this.outerRadiusScale,
+      innerRadiusScale: innerRadiusScale ?? this.innerRadiusScale,
+      outerOpacity: outerOpacity ?? this.outerOpacity,
+      innerOpacity: innerOpacity ?? this.innerOpacity,
+      outerBlur: outerBlur ?? this.outerBlur,
+      innerBlur: innerBlur ?? this.innerBlur,
     );
   }
 }
@@ -1740,6 +1702,9 @@ class _RibbonPolygonButtonSpec {
     required this.accentColor,
     required this.fill,
     required this.border,
+    required this.imageDeltaXWidthUnits,
+    required this.imageDeltaYHeightUnits,
+    required this.imageScaleRatio,
   });
 
   final String label;
@@ -1749,6 +1714,9 @@ class _RibbonPolygonButtonSpec {
   final Color accentColor;
   final Color fill;
   final Color border;
+  final double imageDeltaXWidthUnits;
+  final double imageDeltaYHeightUnits;
+  final double imageScaleRatio;
 }
 
 class _PolygonRibbonPanel extends StatefulWidget {
@@ -1977,83 +1945,22 @@ class _PolygonRibbonPainter extends CustomPainter {
   final int? pressedIndex;
   final double pressedGlowRadius;
 
-  _HorizontalSpan _horizontalSpanAtY(List<Offset> polygon, double y) {
-    final List<double> intersections = <double>[];
-    for (int i = 0; i < polygon.length; i++) {
-      final Offset a = polygon[i];
-      final Offset b = polygon[(i + 1) % polygon.length];
-      final double minY = math.min(a.dy, b.dy);
-      final double maxY = math.max(a.dy, b.dy);
-      if (y < minY || y >= maxY) {
-        continue;
-      }
-      if ((b.dy - a.dy).abs() < 1e-6) {
-        intersections..add(a.dx)..add(b.dx);
-        continue;
-      }
-      final double t = (y - a.dy) / (b.dy - a.dy);
-      intersections.add(a.dx + (b.dx - a.dx) * t);
-    }
-
-    if (intersections.length < 2) {
-      final double minX = polygon.map((Offset p) => p.dx).reduce(math.min);
-      final double maxX = polygon.map((Offset p) => p.dx).reduce(math.max);
-      return _HorizontalSpan(minX, maxX);
-    }
-
-    intersections.sort();
-    return _HorizontalSpan(intersections.first, intersections.last);
-  }
-
-  void _drawStripe({
-    required Canvas canvas,
-    required List<Offset> polygon,
-    required double top,
-    required double height,
-    required double inset,
-    required Color color,
-  }) {
-    final Offset topLeftVertex = polygon[0];
-    final Offset topRightVertex = polygon[1];
-    final Offset bottomRightVertex = polygon[2];
-    final Offset bottomLeftVertex = polygon[3];
-
-    Offset pointOnSegment(Offset a, Offset b, double y) {
-      if ((b.dy - a.dy).abs() < 1e-6) {
-        return Offset(a.dx, y);
-      }
-      final double t = ((y - a.dy) / (b.dy - a.dy)).clamp(0.0, 1.0);
-      return Offset(
-        a.dx + (b.dx - a.dx) * t,
-        a.dy + (b.dy - a.dy) * t,
+  Path _buildHexagonPath(Offset center, double radius) {
+    final Path path = Path();
+    for (int i = 0; i < 6; i++) {
+      final double angle = -math.pi / 2 + math.pi / 6 + i * math.pi / 3;
+      final Offset point = Offset(
+        center.dx + math.cos(angle) * radius,
+        center.dy + math.sin(angle) * radius,
       );
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
     }
-
-    final Offset rawTopLeft = pointOnSegment(bottomLeftVertex, topLeftVertex, top);
-    final Offset rawTopRight = pointOnSegment(topRightVertex, bottomRightVertex, top);
-    final Offset rawBottomLeft =
-        pointOnSegment(bottomLeftVertex, topLeftVertex, top + height);
-    final Offset rawBottomRight =
-        pointOnSegment(topRightVertex, bottomRightVertex, top + height);
-
-    final double topLeft = rawTopLeft.dx + inset;
-    final double topRight = rawTopRight.dx - inset;
-    final double bottomLeft = rawBottomLeft.dx + inset;
-    final double bottomRight = rawBottomRight.dx - inset;
-    if (topRight <= topLeft || bottomRight <= bottomLeft) {
-      return;
-    }
-
-    final Path stripePath = Path()
-      ..moveTo(topLeft, top)
-      ..lineTo(topRight, top)
-      ..lineTo(bottomRight, top + height)
-      ..lineTo(bottomLeft, top + height)
-      ..close();
-    canvas.drawPath(
-      stripePath,
-      Paint()..color = color,
-    );
+    path.close();
+    return path;
   }
 
   @override
@@ -2116,59 +2023,59 @@ class _PolygonRibbonPainter extends CustomPainter {
 
       final ui.Image? image = imagesByAssetPath[spec.assetPath];
       if (image != null) {
-        canvas.save();
-        canvas.clipPath(path);
         final Rect contentRect = Rect.fromLTRB(
           bounds.left + 6,
-          bounds.top + 10,
+          bounds.top + 8,
           bounds.right - 6,
-          bounds.bottom - 22,
+          bounds.bottom - 18,
+        );
+        final Size adjustedDestinationSize = Size(
+          contentRect.width * spec.imageScaleRatio,
+          contentRect.height * spec.imageScaleRatio,
         );
         final FittedSizes fitted = applyBoxFit(
           BoxFit.contain,
           Size(image.width.toDouble(), image.height.toDouble()),
-          contentRect.size,
+          adjustedDestinationSize,
         );
         final Rect inputSubrect = Alignment.center.inscribe(
           fitted.source,
           Offset.zero &
               Size(image.width.toDouble(), image.height.toDouble()),
         );
-        final Rect outputSubrect =
+        final Rect baseOutputSubrect =
             Alignment.center.inscribe(fitted.destination, contentRect);
-        final Offset imageGlowCenter = outputSubrect.center;
+        final Rect outputSubrect = baseOutputSubrect.shift(
+          Offset(
+            spec.imageDeltaXWidthUnits * bounds.width,
+            spec.imageDeltaYHeightUnits * bounds.height,
+          ),
+        );
+        final Offset imageGlowCenter = contentRect.center;
         final double imageGlowRadius =
-            math.max(outputSubrect.width, outputSubrect.height) * 0.62;
-        canvas.drawCircle(
+            math.max(contentRect.width, contentRect.height) * 0.84 * 0.78;
+        final Path outerHexGlow = _buildHexagonPath(
           imageGlowCenter,
-          imageGlowRadius * 0.92,
-          Paint()
-            ..shader = ui.Gradient.radial(
-              imageGlowCenter,
-              imageGlowRadius * 0.92,
-              <Color>[
-                Colors.black.withValues(alpha: 0.22),
-                Colors.black.withValues(alpha: 0.08),
-                Colors.black.withValues(alpha: 0),
-              ],
-              <double>[0, 0.64, 1],
-            ),
+          imageGlowRadius * 0.71,
         );
-        canvas.drawCircle(
+        final Path innerHexGlow = _buildHexagonPath(
           imageGlowCenter,
-          imageGlowRadius,
-          Paint()
-            ..shader = ui.Gradient.radial(
-              imageGlowCenter,
-              imageGlowRadius,
-              <Color>[
-                Colors.white.withValues(alpha: 0.56),
-                Colors.white.withValues(alpha: 0.24),
-                Colors.white.withValues(alpha: 0),
-              ],
-              <double>[0, 0.62, 1],
-            ),
+          imageGlowRadius * 0.61,
         );
+        canvas.drawPath(
+          outerHexGlow,
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.54)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        );
+        canvas.drawPath(
+          innerHexGlow,
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.74)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0),
+        );
+        canvas.save();
+        canvas.clipPath(path);
         canvas.drawImageRect(
           image,
           inputSubrect,
@@ -2178,67 +2085,6 @@ class _PolygonRibbonPainter extends CustomPainter {
         canvas.restore();
       }
 
-      const double horizontalInset = 0;
-      const double lineHeight = 2;
-      const double lineGap = 0;
-      _drawStripe(
-        canvas: canvas,
-        polygon: spec.polygon,
-        top: bounds.top,
-        height: lineHeight,
-        inset: horizontalInset,
-        color: Colors.white,
-      );
-      _drawStripe(
-        canvas: canvas,
-        polygon: spec.polygon,
-        top: bounds.top + lineHeight + lineGap,
-        height: lineHeight,
-        inset: horizontalInset,
-        color: spec.accentColor,
-      );
-      _drawStripe(
-        canvas: canvas,
-        polygon: spec.polygon,
-        top: bounds.bottom - lineHeight * 2 - lineGap,
-        height: lineHeight,
-        inset: horizontalInset,
-        color: spec.accentColor,
-      );
-      _drawStripe(
-        canvas: canvas,
-        polygon: spec.polygon,
-        top: bounds.bottom - lineHeight,
-        height: lineHeight,
-        inset: horizontalInset,
-        color: Colors.white,
-      );
-
-      final TextPainter textPainter = TextPainter(
-        text: TextSpan(
-          text: spec.label,
-          style: labelStyle.copyWith(
-            shadows: <Shadow>[
-              Shadow(
-                color: Colors.white.withValues(alpha: 0.72),
-                blurRadius: 8,
-              ),
-              Shadow(
-                color: Colors.white.withValues(alpha: 0.38),
-                blurRadius: 16,
-              ),
-            ],
-          ),
-        ),
-        textDirection: textDirection,
-        maxLines: 1,
-      )..layout(maxWidth: math.max(0, bounds.width - 18));
-      final double labelTop = bounds.top + lineHeight * 2 + lineGap + 2;
-      final _HorizontalSpan labelSpan =
-          _horizontalSpanAtY(spec.polygon, labelTop + textPainter.height / 2);
-      final double labelLeft = labelSpan.left + 5;
-      final Offset textOffset = Offset(labelLeft, labelTop);
-      textPainter.paint(canvas, textOffset);
     }
   }
 
@@ -2252,13 +2098,6 @@ class _PolygonRibbonPainter extends CustomPainter {
         oldDelegate.pressedIndex != pressedIndex ||
         oldDelegate.pressedGlowRadius != pressedGlowRadius;
   }
-}
-
-class _HorizontalSpan {
-  const _HorizontalSpan(this.left, this.right);
-
-  final double left;
-  final double right;
 }
 
 class _SlantedCapsuleClipper extends CustomClipper<Path> {
