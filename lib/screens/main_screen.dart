@@ -803,15 +803,17 @@ class _BottomRibbon extends StatelessWidget {
       spacing: 0.35,
     );
     return SizedBox(
-      height: 81.84,
+      height: 98,
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           const double buttonHeight = 81.84;
-          const double preferredPanelWidth = 664.0;
+          const double warWidthScale = 1.10;
+          const double warHeightScale = 1.18;
+          const double preferredPanelWidth = 696.0;
           final double panelWidth =
               math.min(constraints.maxWidth, preferredPanelWidth);
-          final double buttonWidth =
-              math.max(0, panelWidth / actions.length);
+          final double baseButtonWidth =
+              math.max(0, panelWidth / ((actions.length - 1) + warWidthScale));
           final List<Color> accentColors = <Color>[
             factionTierColor(SoldierDesignPalette.red, 1),
             factionTierColor(SoldierDesignPalette.red, 3),
@@ -821,11 +823,29 @@ class _BottomRibbon extends StatelessWidget {
             factionTierColor(SoldierDesignPalette.blue, 3),
             factionTierColor(SoldierDesignPalette.blue, 4),
           ];
+          final List<Color> fillColors = <Color>[
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+          ];
+          final List<Color> borderColors = <Color>[
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+          ];
           const List<double> imageDxWidthUnits = <double>[
             0.01,
             0.00,
             0.00,
-            0.01,
+            -0.01,
             0.00,
             0.00,
             0.00,
@@ -834,25 +854,64 @@ class _BottomRibbon extends StatelessWidget {
             0.03,
             0.01,
             0.00,
-            0.00,
+            0.055,
             0.00,
             0.02,
+            0.00,
+          ];
+          const List<double> glowDyHeightUnits = <double>[
+            0.00,
+            0.00,
+            0.00,
+            0.04,
+            0.00,
+            0.00,
             0.00,
           ];
           const List<double> imageScaleRatios = <double>[
             1.27,
             0.95,
             1.31,
-            1.00,
-            1.15,
+            1.495,
+            1.20,
             0.97,
             1.16,
           ];
+          const List<double> visualScaleRatios = <double>[
+            1.00,
+            1.00,
+            1.00,
+            1.00,
+            1.00,
+            1.00,
+            1.00,
+          ];
+          final List<double> buttonWidths = <double>[
+            baseButtonWidth,
+            baseButtonWidth,
+            baseButtonWidth,
+            baseButtonWidth * warWidthScale,
+            baseButtonWidth,
+            baseButtonWidth,
+            baseButtonWidth,
+          ];
+          final List<double> buttonHeights = <double>[
+            buttonHeight,
+            buttonHeight,
+            buttonHeight,
+            buttonHeight * warHeightScale,
+            buttonHeight,
+            buttonHeight,
+            buttonHeight,
+          ];
+          final double totalButtonsWidth =
+              buttonWidths.reduce((double a, double b) => a + b);
+          final double rowLeft = (panelWidth - totalButtonsWidth) / 2;
           final List<double> buttonLefts = <double>[];
-          double currentLeft = 0;
+          double currentLeft = rowLeft;
           for (int index = 0; index < actions.length; index++) {
             buttonLefts.add(currentLeft);
-            currentLeft += buttonWidth;
+            currentLeft += buttonWidths[index];
           }
           final List<_RibbonPolygonButtonSpec> specs = <_RibbonPolygonButtonSpec>[
             for (int index = 0; index < actions.length; index++)
@@ -862,17 +921,28 @@ class _BottomRibbon extends StatelessWidget {
                 assetPath:
                     'image/button_${actions[index].label.toLowerCase()}.png',
                 polygon: <Offset>[
-                  Offset(buttonLefts[index], 0),
-                  Offset(buttonLefts[index] + buttonWidth, 0),
-                  Offset(buttonLefts[index] + buttonWidth, buttonHeight),
+                  Offset(
+                    buttonLefts[index],
+                    (buttonHeight - buttonHeights[index]).clamp(-1000, 1000),
+                  ),
+                  Offset(
+                    buttonLefts[index] + buttonWidths[index],
+                    (buttonHeight - buttonHeights[index]).clamp(-1000, 1000),
+                  ),
+                  Offset(
+                    buttonLefts[index] + buttonWidths[index],
+                    buttonHeight,
+                  ),
                   Offset(buttonLefts[index], buttonHeight),
                 ],
                 accentColor: accentColors[index],
-                fill: Colors.transparent,
-                border: Colors.transparent,
+                fill: fillColors[index],
+                border: borderColors[index],
                 imageDeltaXWidthUnits: imageDxWidthUnits[index],
                 imageDeltaYHeightUnits: imageDyHeightUnits[index],
+                glowDeltaYHeightUnits: glowDyHeightUnits[index],
                 imageScaleRatio: imageScaleRatios[index],
+                visualScaleRatio: visualScaleRatios[index],
               ),
           ];
           return Align(
@@ -1705,7 +1775,9 @@ class _RibbonPolygonButtonSpec {
     required this.border,
     required this.imageDeltaXWidthUnits,
     required this.imageDeltaYHeightUnits,
+    required this.glowDeltaYHeightUnits,
     required this.imageScaleRatio,
+    required this.visualScaleRatio,
   });
 
   final String label;
@@ -1717,7 +1789,9 @@ class _RibbonPolygonButtonSpec {
   final Color border;
   final double imageDeltaXWidthUnits;
   final double imageDeltaYHeightUnits;
+  final double glowDeltaYHeightUnits;
   final double imageScaleRatio;
+  final double visualScaleRatio;
 }
 
 class _PolygonRibbonPanel extends StatefulWidget {
@@ -2020,14 +2094,21 @@ class _PolygonRibbonPainter extends CustomPainter {
             spec.imageDeltaYHeightUnits * bounds.height,
           ),
         );
-        final Offset imageGlowCenter = contentRect.center;
+        final Offset imageGlowCenter = contentRect.center.translate(
+          0,
+          spec.glowDeltaYHeightUnits * bounds.height,
+        );
         final double imageGlowRadius =
-            math.max(contentRect.width, contentRect.height) * 0.84 * 0.78;
+            math.max(contentRect.width, contentRect.height) *
+            0.84 *
+            0.78 *
+            spec.visualScaleRatio;
         final Offset glowPivot = Offset(
           bounds.center.dx,
           imageGlowCenter.dy + imageGlowRadius * 0.61,
         );
-        final double effectiveScale = pressedIndex == index ? pressedScale : 1;
+        final double effectiveScale =
+            spec.visualScaleRatio * (pressedIndex == index ? pressedScale : 1);
         Matrix4 pivotScaleMatrix(Offset pivot, double scale) {
           return Matrix4.identity()
             ..translate(pivot.dx, pivot.dy)
