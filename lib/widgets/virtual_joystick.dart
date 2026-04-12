@@ -11,6 +11,9 @@ class VirtualJoystick extends StatefulWidget {
     this.baseColor = const Color(0x33FFFFFF),
     this.ringColor = const Color(0x88FFFFFF),
     this.knobColor = const Color(0xE6FFFFFF),
+    this.knobAssetPath,
+    this.knobImageScale = 1,
+    this.knobImageOffset = Offset.zero,
   });
 
   final double outerRadius;
@@ -19,6 +22,9 @@ class VirtualJoystick extends StatefulWidget {
   final Color baseColor;
   final Color ringColor;
   final Color knobColor;
+  final String? knobAssetPath;
+  final double knobImageScale;
+  final Offset knobImageOffset;
 
   @override
   State<VirtualJoystick> createState() => _VirtualJoystickState();
@@ -55,6 +61,8 @@ class _VirtualJoystickState extends State<VirtualJoystick> {
   @override
   Widget build(BuildContext context) {
     final double s = widget.outerRadius * 2;
+    final Offset center = Offset(widget.outerRadius, widget.outerRadius);
+    final Offset knobCenter = center + _knob;
     return SizedBox(
       width: s,
       height: s,
@@ -63,38 +71,74 @@ class _VirtualJoystickState extends State<VirtualJoystick> {
         onPanUpdate: (DragUpdateDetails e) => _updateKnob(e.localPosition),
         onPanEnd: (_) => _release(),
         onPanCancel: _release,
-        child: CustomPaint(
-          painter: _JoystickPainter(
-            knob: _knob,
-            outerRadius: widget.outerRadius,
-            knobRadius: widget.knobRadius,
-            baseColor: widget.baseColor,
-            ringColor: widget.ringColor,
-            knobColor: widget.knobColor,
-          ),
-          size: Size(s, s),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            CustomPaint(
+              painter: _JoystickBasePainter(
+                outerRadius: widget.outerRadius,
+                baseColor: widget.baseColor,
+                ringColor: widget.ringColor,
+              ),
+              size: Size(s, s),
+            ),
+            Positioned(
+              left: knobCenter.dx - widget.knobRadius,
+              top: knobCenter.dy - widget.knobRadius,
+              child: Container(
+                width: widget.knobRadius * 2,
+                height: widget.knobRadius * 2,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.knobColor,
+                  border: Border.all(
+                    color: Colors.black26,
+                    width: 1.5,
+                  ),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: widget.knobAssetPath == null
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.all(3),
+                        child: ClipOval(
+                          child: Transform.translate(
+                            offset: widget.knobImageOffset,
+                            child: Transform.scale(
+                              scale: widget.knobImageScale,
+                              child: Image.asset(
+                                widget.knobAssetPath!,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _JoystickPainter extends CustomPainter {
-  _JoystickPainter({
-    required this.knob,
+class _JoystickBasePainter extends CustomPainter {
+  _JoystickBasePainter({
     required this.outerRadius,
-    required this.knobRadius,
     required this.baseColor,
     required this.ringColor,
-    required this.knobColor,
   });
 
-  final Offset knob;
   final double outerRadius;
-  final double knobRadius;
   final Color baseColor;
   final Color ringColor;
-  final Color knobColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -108,22 +152,12 @@ class _JoystickPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3,
     );
-    final Offset k = c + knob;
-    canvas.drawCircle(k, knobRadius, Paint()..color = knobColor);
-    canvas.drawCircle(
-      k,
-      knobRadius,
-      Paint()
-        ..color = Colors.black26
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
   }
 
   @override
-  bool shouldRepaint(covariant _JoystickPainter oldDelegate) {
-    return oldDelegate.knob != knob ||
-        oldDelegate.outerRadius != outerRadius ||
-        oldDelegate.knobRadius != knobRadius;
+  bool shouldRepaint(covariant _JoystickBasePainter oldDelegate) {
+    return oldDelegate.outerRadius != outerRadius ||
+        oldDelegate.baseColor != baseColor ||
+        oldDelegate.ringColor != ringColor;
   }
 }

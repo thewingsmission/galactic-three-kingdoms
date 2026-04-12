@@ -210,6 +210,22 @@ class _WarScreenState extends State<WarScreen>
     final List<Color> redTier = kRedFactionComponentColors;
     final List<Color> yellowTier = kYellowFactionComponentColors;
     final List<Color> blueTier = kBlueFactionComponentColors;
+    final List<Color> joystickTier = factionTierList(widget.playerPalette);
+    final String joystickKnobAssetPath = switch (widget.playerPalette) {
+      SoldierDesignPalette.red => 'image/red_eagle.png',
+      SoldierDesignPalette.yellow => 'image/yellow_tiger.png',
+      SoldierDesignPalette.blue => 'image/blue_dragon.png',
+    };
+    final double joystickKnobImageScale = switch (widget.playerPalette) {
+      SoldierDesignPalette.red => 1.2,
+      SoldierDesignPalette.yellow => 1.0,
+      SoldierDesignPalette.blue => 1.1,
+    };
+    final Offset joystickKnobImageOffset = switch (widget.playerPalette) {
+      SoldierDesignPalette.red => const Offset(0, 4.48),
+      SoldierDesignPalette.yellow => Offset.zero,
+      SoldierDesignPalette.blue => const Offset(0, 2.8),
+    };
 
     return Scaffold(
       body: Stack(
@@ -280,9 +296,18 @@ class _WarScreenState extends State<WarScreen>
                         outerRadius: 72,
                         knobRadius: 28,
                         onChanged: (Offset o) => _game.setStick(o),
-                        baseColor: eliminated ? const Color(0x22888888) : const Color(0x33FFFFFF),
-                        ringColor: eliminated ? const Color(0x44888888) : const Color(0x88FFFFFF),
-                        knobColor: eliminated ? const Color(0x66888888) : const Color(0xE6FFFFFF),
+                        baseColor: eliminated
+                            ? const Color(0x22888888)
+                            : joystickTier[2].withValues(alpha: 0.5),
+                        ringColor: eliminated
+                            ? const Color(0x44888888)
+                            : joystickTier[1].withValues(alpha: 0.9),
+                        knobColor: eliminated
+                            ? const Color(0x66888888)
+                            : joystickTier[4].withValues(alpha: 0.98),
+                        knobAssetPath: eliminated ? null : joystickKnobAssetPath,
+                        knobImageScale: joystickKnobImageScale,
+                        knobImageOffset: joystickKnobImageOffset,
                       ),
                     ),
                   ),
