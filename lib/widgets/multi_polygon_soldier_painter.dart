@@ -829,6 +829,35 @@ class MultiPolygonSoldierPainter extends CustomPainter {
     Offset map(Offset p) =>
         Offset(c.dx + (p.dx - bx) * scale, c.dy + (p.dy - by) * scale);
 
+    void paintPunchBurstVfxBelowSoldier() {
+      if (crownVfxMode != CrownVfxMode.punchBurst || attackCycleT == null) {
+        return;
+      }
+      final double punchEnv = attackProbeEnvelope(attackCycleT!);
+      if (punchEnv <= 0.01) {
+        return;
+      }
+      for (int i = 0; i < parts.length; i++) {
+        if (parts[i].stackRole != SoldierPartStackRole.attack) continue;
+        final List<Offset>? fv = fillX[i];
+        if (fv == null || fv.length < 3) continue;
+        final Offset bodyCen = map(_sCentroid(fv));
+        final int vertexCount = fv.length;
+        _paintPunchBurstParticles(
+          canvas,
+          bodyCen,
+          vertexCount,
+          punchEnv,
+          motionT,
+          scale,
+          displayPalette,
+        );
+        break;
+      }
+    }
+
+    paintPunchBurstVfxBelowSoldier();
+
     void paintPartsForRole(SoldierPartStackRole role) {
       for (int i = 0; i < parts.length; i++) {
         if (parts[i].stackRole != role) continue;
@@ -1026,26 +1055,6 @@ class MultiPolygonSoldierPainter extends CustomPainter {
             hubStarScreen,
             i,
           );
-        }
-      }
-    }
-
-    // Punch burst VFX: polygon particles spray 360° from body centroid at peak.
-    if (crownVfxMode == CrownVfxMode.punchBurst && attackCycleT != null) {
-      final double punchEnv = attackProbeEnvelope(attackCycleT!);
-      if (punchEnv > 0.01) {
-        // Find first attack-role filled polygon as the body template.
-        for (int i = 0; i < parts.length; i++) {
-          if (parts[i].stackRole != SoldierPartStackRole.attack) continue;
-          final List<Offset>? fv = fillX[i];
-          if (fv == null || fv.length < 3) continue;
-          final Offset bodyCen = map(_sCentroid(fv));
-          final int vertexCount = fv.length;
-          _paintPunchBurstParticles(
-            canvas, bodyCen, vertexCount, punchEnv, motionT,
-            scale, displayPalette,
-          );
-          break;
         }
       }
     }
