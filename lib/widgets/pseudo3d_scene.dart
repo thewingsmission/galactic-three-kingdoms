@@ -712,21 +712,41 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     final double blue =
         score(const Offset(0.82, 0.42), 0.92) + math.sin(n.dx * 10.0) * 0.03;
 
+    int strengthLevel(Offset localCenter) {
+      final int q = (localCenter.dx / (_baseRadius * 1.5)).round();
+      final int r =
+          ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
+      final int hash = ((q * 92821) ^ (r * 68917) ^ 0x5A17) & 0x7fffffff;
+      return (hash % 4) + 1;
+    }
+
+    int tierForLevel(int level) {
+      return switch (level) {
+        4 => 1,
+        3 => 2,
+        2 => 3,
+        _ => 4,
+      };
+    }
+
+    final int level = strengthLevel(center);
+    final int tier = tierForLevel(level);
+
     if (red >= yellow && red >= blue) {
       return (
-        outer: const Color(0xFFD65122),
-        inner: factionTierList(SoldierDesignPalette.red)[1],
+        outer: factionTierList(SoldierDesignPalette.red)[tier - 1],
+        inner: factionTierList(SoldierDesignPalette.red)[tier - 1],
       );
     }
     if (yellow >= red && yellow >= blue) {
       return (
-        outer: const Color(0xFFE2BD10),
-        inner: factionTierList(SoldierDesignPalette.yellow)[1],
+        outer: factionTierList(SoldierDesignPalette.yellow)[tier - 1],
+        inner: factionTierList(SoldierDesignPalette.yellow)[tier - 1],
       );
     }
     return (
-      outer: const Color(0xFF5C8FA6),
-      inner: factionTierList(SoldierDesignPalette.blue)[1],
+      outer: factionTierList(SoldierDesignPalette.blue)[tier - 1],
+      inner: factionTierList(SoldierDesignPalette.blue)[tier - 1],
     );
   }
 
