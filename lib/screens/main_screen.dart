@@ -34,6 +34,7 @@ class _MainScreenState extends State<MainScreen> {
     outerBlur: 2,
     innerBlur: 0,
   );
+  Level4UnitDesign _level4Design = Level4UnitDesign.defaultSolid;
 
   @override
   Widget build(BuildContext context) {
@@ -50,9 +51,25 @@ class _MainScreenState extends State<MainScreen> {
                     meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
                     boardBottomInset: 0,
                     viewportHeightFactor: 0.92,
+                    level4Design: _level4Design,
                   ),
                 ),
               ],
+            ),
+          ),
+          Positioned(
+            top: 16,
+            right: 16,
+            child: SafeArea(
+              bottom: false,
+              child: _Level4DesignPicker(
+                selectedDesign: _level4Design,
+                onChanged: (Level4UnitDesign design) {
+                  setState(() {
+                    _level4Design = design;
+                  });
+                },
+              ),
             ),
           ),
           Positioned(
@@ -68,6 +85,78 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Level4DesignPicker extends StatelessWidget {
+  const _Level4DesignPicker({
+    required this.selectedDesign,
+    required this.onChanged,
+  });
+
+  final Level4UnitDesign selectedDesign;
+  final ValueChanged<Level4UnitDesign> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget buildButton(String label, Level4UnitDesign design) {
+      final bool selected = selectedDesign == design;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => onChanged(design),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            decoration: BoxDecoration(
+              color: selected
+                  ? Colors.white.withValues(alpha: 0.18)
+                  : Colors.black.withValues(alpha: 0.24),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: selected ? 0.34 : 0.14),
+              ),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: 480,
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0C1220).withValues(alpha: 0.84),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.24),
+            blurRadius: 16,
+          ),
+        ],
+      ),
+      child: Row(
+        children: <Widget>[
+          buildButton('Default', Level4UnitDesign.defaultSolid),
+          const SizedBox(width: 6),
+          buildButton('Y Lose', Level4UnitDesign.yLose),
+          const SizedBox(width: 6),
+          buildButton('Y Win', Level4UnitDesign.yWin),
+          const SizedBox(width: 6),
+          buildButton('R Lose', Level4UnitDesign.rLose),
+          const SizedBox(width: 6),
+          buildButton('B Lose', Level4UnitDesign.bLose),
         ],
       ),
     );

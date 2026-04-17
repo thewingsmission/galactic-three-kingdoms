@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +21,7 @@ class Pseudo3DScene extends StatefulWidget {
     this.maxViewportHeight = 540,
     this.viewportWidthFactor = 0.94,
     this.maxViewportWidth = 980,
+    this.level4Design = Level4UnitDesign.defaultSolid,
   });
 
   final Pseudo3DMeshMode meshMode;
@@ -27,6 +30,7 @@ class Pseudo3DScene extends StatefulWidget {
   final double maxViewportHeight;
   final double viewportWidthFactor;
   final double maxViewportWidth;
+  final Level4UnitDesign level4Design;
 
   @override
   State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
@@ -36,6 +40,14 @@ enum Pseudo3DMeshMode {
   solid,
   outlineTransparent,
   outlineHalfTransparent,
+}
+
+enum Level4UnitDesign {
+  defaultSolid,
+  yLose,
+  yWin,
+  rLose,
+  bLose,
 }
 
 class _Pseudo3DSceneState extends State<Pseudo3DScene>
@@ -58,17 +70,213 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   Size _sceneSize = Size.zero;
   double _shadowAnchorWorldY = 0;
   double _soldierMotionT = 0;
+  double _effectT = 0;
   double _zoom = 1;
   double _gestureStartZoom = 1;
   double _latestBoardLayoutHeight = 0;
   int _activePointerCount = 0;
   bool _didInitializeBoardOffset = false;
+  bool _yellowSlimeFramesLoadingStarted = false;
+  final List<ui.Image> _yellowSlimeFrames = <ui.Image>[];
+  bool _fireYellowFramesLoadingStarted = false;
+  final List<ui.Image> _fireYellowFrames = <ui.Image>[];
+  bool _redSlimeFramesLoadingStarted = false;
+  final List<ui.Image> _redSlimeFrames = <ui.Image>[];
+  bool _blueSlimeFramesLoadingStarted = false;
+  final List<ui.Image> _blueSlimeFrames = <ui.Image>[];
+  bool _tigerLoseLoadingStarted = false;
+  ui.Image? _tigerLoseImage;
+  bool _tigerWinLoadingStarted = false;
+  ui.Image? _tigerWinImage;
+  bool _eagleLoseLoadingStarted = false;
+  ui.Image? _eagleLoseImage;
+  bool _dragonLoseLoadingStarted = false;
+  ui.Image? _dragonLoseImage;
 
   @override
   void initState() {
     super.initState();
     _keyboardFocusNode = FocusNode(debugLabel: 'Pseudo3DSceneKeyboardFocus');
     _ticker = createTicker(_tick)..start();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_yellowSlimeFramesLoadingStarted) {
+      _yellowSlimeFramesLoadingStarted = true;
+      _loadFrames(
+        prefix: 'image/slime yellow ',
+        suffix: '.png',
+        target: _yellowSlimeFrames,
+      );
+    }
+    if (!_redSlimeFramesLoadingStarted) {
+      _redSlimeFramesLoadingStarted = true;
+      _loadFrames(
+        prefix: 'image/slime red ',
+        suffix: '.png',
+        target: _redSlimeFrames,
+      );
+    }
+    if (!_blueSlimeFramesLoadingStarted) {
+      _blueSlimeFramesLoadingStarted = true;
+      _loadFrames(
+        prefix: 'image/slime blue ',
+        suffix: '.png',
+        target: _blueSlimeFrames,
+      );
+    }
+    if (!_fireYellowFramesLoadingStarted) {
+      _fireYellowFramesLoadingStarted = true;
+      _loadFrames(
+        prefix: 'image/fire yellow ',
+        suffix: '.png',
+        target: _fireYellowFrames,
+        frameCount: 6,
+      );
+    }
+    if (!_tigerLoseLoadingStarted) {
+      _tigerLoseLoadingStarted = true;
+      _loadTigerLose();
+    }
+    if (!_tigerWinLoadingStarted) {
+      _tigerWinLoadingStarted = true;
+      _loadTigerWin();
+    }
+    if (!_eagleLoseLoadingStarted) {
+      _eagleLoseLoadingStarted = true;
+      _loadEagleLose();
+    }
+    if (!_dragonLoseLoadingStarted) {
+      _dragonLoseLoadingStarted = true;
+      _loadDragonLose();
+    }
+  }
+
+  Future<void> _loadFrames({
+    required String prefix,
+    required String suffix,
+    required List<ui.Image> target,
+    int frameCount = 9,
+  }) async {
+    final List<ui.Image> loaded = <ui.Image>[];
+    for (int i = 1; i <= frameCount; i++) {
+      try {
+        final ByteData data = await rootBundle.load('$prefix$i$suffix');
+        final ui.Codec codec = await ui.instantiateImageCodec(
+          data.buffer.asUint8List(),
+        );
+        final ui.FrameInfo frame = await codec.getNextFrame();
+        loaded.add(frame.image);
+      } catch (_) {
+        for (final ui.Image image in loaded) {
+          image.dispose();
+        }
+        return;
+      }
+    }
+    if (!mounted) {
+      for (final ui.Image image in loaded) {
+        image.dispose();
+      }
+      return;
+    }
+    setState(() {
+      target.addAll(loaded);
+    });
+  }
+
+  Future<void> _loadTigerLose() async {
+    try {
+      final ByteData data = await rootBundle.load('image/tiger_lose.png');
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(),
+      );
+      final ui.FrameInfo frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      setState(() {
+        _tigerLoseImage?.dispose();
+        _tigerLoseImage = frame.image;
+      });
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('Pseudo3DScene: failed loading image/tiger_lose.png: $e');
+        debugPrint('$st');
+      }
+    }
+  }
+
+  Future<void> _loadTigerWin() async {
+    try {
+      final ByteData data = await rootBundle.load('image/tiger_win.png');
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(),
+      );
+      final ui.FrameInfo frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      setState(() {
+        _tigerWinImage?.dispose();
+        _tigerWinImage = frame.image;
+      });
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('Pseudo3DScene: failed loading image/tiger_win.png: $e');
+        debugPrint('$st');
+      }
+    }
+  }
+
+  Future<void> _loadEagleLose() async {
+    try {
+      final ByteData data = await rootBundle.load('image/eagle_lose.png');
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(),
+      );
+      final ui.FrameInfo frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      setState(() {
+        _eagleLoseImage?.dispose();
+        _eagleLoseImage = frame.image;
+      });
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('Pseudo3DScene: failed loading image/eagle_lose.png: $e');
+        debugPrint('$st');
+      }
+    }
+  }
+
+  Future<void> _loadDragonLose() async {
+    try {
+      final ByteData data = await rootBundle.load('image/dragon_lose.png');
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(),
+      );
+      final ui.FrameInfo frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      setState(() {
+        _dragonLoseImage?.dispose();
+        _dragonLoseImage = frame.image;
+      });
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('Pseudo3DScene: failed loading image/dragon_lose.png: $e');
+        debugPrint('$st');
+      }
+    }
   }
 
   void _tick(Duration elapsed) {
@@ -91,6 +299,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
 
     setState(() {
       _soldierMotionT = nextMotionT;
+      _effectT = elapsedSeconds;
 
       if (_movementVector != Offset.zero && mounted) {
         final Offset proposed = _boardOffset.translate(
@@ -257,108 +466,27 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   void dispose() {
     _keyboardFocusNode.dispose();
     _ticker.dispose();
+    for (final ui.Image image in _yellowSlimeFrames) {
+      image.dispose();
+    }
+    for (final ui.Image image in _fireYellowFrames) {
+      image.dispose();
+    }
+    for (final ui.Image image in _redSlimeFrames) {
+      image.dispose();
+    }
+    for (final ui.Image image in _blueSlimeFrames) {
+      image.dispose();
+    }
+    _tigerLoseImage?.dispose();
+    _tigerWinImage?.dispose();
+    _eagleLoseImage?.dispose();
+    _dragonLoseImage?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final Widget sceneStack = Stack(
-      children: <Widget>[
-        Positioned.fill(
-          bottom: widget.boardBottomInset,
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              _latestBoardLayoutHeight = constraints.maxHeight;
-              final double viewportWidth =
-                  math.min(constraints.maxWidth * widget.viewportWidthFactor, widget.maxViewportWidth);
-              final double viewportHeight =
-                  math.min(constraints.maxHeight * widget.viewportHeightFactor, widget.maxViewportHeight);
-              _viewportSize = Size(viewportWidth, viewportHeight);
-              final double totalScreenHeight =
-                  constraints.maxHeight + widget.boardBottomInset;
-              final double shadowCenterScreenY =
-                  totalScreenHeight / 2 +
-                  totalScreenHeight * _soldierAnchorScreenYOffsetFactor +
-                  _ProductionJollyCircleMarker.shadowCenterOffsetFromMarkerCenter(
-                    _markerBoxSize,
-                  ) * _zoom;
-              final double viewportTop =
-                  (constraints.maxHeight - viewportHeight) / 2;
-              final double shadowCenterViewportY =
-                  shadowCenterScreenY - viewportTop;
-
-              _shadowAnchorWorldY = _Pseudo3DBoardPainter.anchorWorldYForViewport(
-                _viewportSize,
-                targetScreenY: shadowCenterViewportY,
-                hexGap: 0,
-                zoom: _zoom,
-              );
-              final Offset initialOffset =
-                  _Pseudo3DBoardPainter.initialOffsetForViewport(
-                _viewportSize,
-                targetScreenY: shadowCenterViewportY,
-                hexGap: 0,
-                zoom: _zoom,
-              );
-              if (!_didInitializeBoardOffset) {
-                _didInitializeBoardOffset = true;
-                _boardOffset = initialOffset;
-              }
-              final Offset clampedOffset = _Pseudo3DBoardPainter.clampOffsetForLocalAnchor(
-                currentOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
-                proposedOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
-                anchorWorldY: _shadowAnchorWorldY,
-                hexGap: 0,
-                zoom: _zoom,
-              );
-              _boardOffset = clampedOffset;
-
-              return Center(
-                child: SizedBox(
-                  width: viewportWidth,
-                  height: viewportHeight,
-                  child: CustomPaint(
-                    painter: _Pseudo3DBoardPainter(
-                      boardOffset: clampedOffset,
-                      meshMode: widget.meshMode,
-                      zoom: _zoom,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                return Center(
-                  child: Transform.translate(
-                    offset: Offset(
-                      0,
-                      constraints.maxHeight * _soldierAnchorScreenYOffsetFactor,
-                    ),
-                    child: Transform.scale(
-                      scale: _zoom,
-                      alignment: Alignment.center,
-                      child: SizedBox(
-                        width: _markerBoxSize,
-                        height: _markerBoxSize,
-                        child: _ProductionJollyCircleMarker(
-                          motionT: _soldierMotionT,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-
     return Focus(
       autofocus: true,
       focusNode: _keyboardFocusNode,
@@ -367,6 +495,168 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
         builder: (BuildContext context, BoxConstraints constraints) {
           final Size size = Size(constraints.maxWidth, constraints.maxHeight);
           _sceneSize = size;
+
+          final double boardLayoutHeight = math.max(
+            0.0,
+            constraints.maxHeight - widget.boardBottomInset,
+          );
+          _latestBoardLayoutHeight = boardLayoutHeight;
+          final double viewportWidth = math.min(
+            constraints.maxWidth * widget.viewportWidthFactor,
+            widget.maxViewportWidth,
+          );
+          final double viewportHeight = math.min(
+            boardLayoutHeight * widget.viewportHeightFactor,
+            widget.maxViewportHeight,
+          );
+          _viewportSize = Size(viewportWidth, viewportHeight);
+
+          final double totalScreenHeight = constraints.maxHeight;
+          final double shadowCenterScreenY =
+              totalScreenHeight / 2 +
+              totalScreenHeight * _soldierAnchorScreenYOffsetFactor +
+              _ProductionJollyCircleMarker.shadowCenterOffsetFromMarkerCenter(
+                    _markerBoxSize,
+                  ) *
+                  _zoom;
+          final double viewportTop = (boardLayoutHeight - viewportHeight) / 2;
+          final double shadowCenterViewportY = shadowCenterScreenY - viewportTop;
+
+          _shadowAnchorWorldY = _Pseudo3DBoardPainter.anchorWorldYForViewport(
+            _viewportSize,
+            targetScreenY: shadowCenterViewportY,
+            hexGap: 0,
+            zoom: _zoom,
+          );
+          final Offset initialOffset =
+              _Pseudo3DBoardPainter.initialOffsetForViewport(
+            _viewportSize,
+            targetScreenY: shadowCenterViewportY,
+            hexGap: 0,
+            zoom: _zoom,
+          );
+          if (!_didInitializeBoardOffset) {
+            _didInitializeBoardOffset = true;
+            _boardOffset = initialOffset;
+          }
+          final Offset clampedOffset = _Pseudo3DBoardPainter.clampOffsetForLocalAnchor(
+            currentOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
+            proposedOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
+            anchorWorldY: _shadowAnchorWorldY,
+            hexGap: 0,
+            zoom: _zoom,
+          );
+          _boardOffset = clampedOffset;
+
+          final Widget sceneStack = Stack(
+            children: <Widget>[
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: widget.boardBottomInset,
+                child: Center(
+                  child: SizedBox(
+                    width: viewportWidth,
+                    height: viewportHeight,
+                    child: CustomPaint(
+                      painter: _Pseudo3DBoardPainter(
+                        boardOffset: clampedOffset,
+                        meshMode: widget.meshMode,
+                        zoom: _zoom,
+                        effectT: _effectT,
+                        level4Design: widget.level4Design,
+                        yellowSlimeFrames: _yellowSlimeFrames,
+                        fireYellowFrames: _fireYellowFrames,
+                        redSlimeFrames: _redSlimeFrames,
+                        blueSlimeFrames: _blueSlimeFrames,
+                        tigerLoseImage: _tigerLoseImage,
+                        tigerWinImage: _tigerWinImage,
+                        eagleLoseImage: _eagleLoseImage,
+                        dragonLoseImage: _dragonLoseImage,
+                        paintLayer: _BoardPaintLayer.hexMesh,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Center(
+                    child: Transform.translate(
+                      offset: Offset(
+                        0,
+                        constraints.maxHeight * _soldierAnchorScreenYOffsetFactor,
+                      ),
+                      child: Transform.scale(
+                        scale: _zoom,
+                        alignment: Alignment.center,
+                        child: SizedBox(
+                          width: _markerBoxSize,
+                          height: _markerBoxSize,
+                          child: const _ProductionJollyCircleShadow(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: widget.boardBottomInset,
+                child: Center(
+                  child: SizedBox(
+                    width: viewportWidth,
+                    height: viewportHeight,
+                    child: CustomPaint(
+                      painter: _Pseudo3DBoardPainter(
+                        boardOffset: clampedOffset,
+                        meshMode: widget.meshMode,
+                        zoom: _zoom,
+                        effectT: _effectT,
+                        level4Design: widget.level4Design,
+                        yellowSlimeFrames: _yellowSlimeFrames,
+                        fireYellowFrames: _fireYellowFrames,
+                        redSlimeFrames: _redSlimeFrames,
+                        blueSlimeFrames: _blueSlimeFrames,
+                        tigerLoseImage: _tigerLoseImage,
+                        tigerWinImage: _tigerWinImage,
+                        eagleLoseImage: _eagleLoseImage,
+                        dragonLoseImage: _dragonLoseImage,
+                        paintLayer: _BoardPaintLayer.warEffects,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Center(
+                    child: Transform.translate(
+                      offset: Offset(
+                        0,
+                        constraints.maxHeight * _soldierAnchorScreenYOffsetFactor,
+                      ),
+                      child: Transform.scale(
+                        scale: _zoom,
+                        alignment: Alignment.center,
+                        child: SizedBox(
+                          width: _markerBoxSize,
+                          height: _markerBoxSize,
+                          child: _ProductionJollyCircleBody(
+                            motionT: _soldierMotionT,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+
           return Listener(
             behavior: HitTestBehavior.translucent,
             onPointerDown: (PointerDownEvent event) {
@@ -398,10 +688,8 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   }
 }
 
-class _ProductionJollyCircleMarker extends StatelessWidget {
-  const _ProductionJollyCircleMarker({
-    required this.motionT,
-  });
+class _ProductionJollyCircleMarker {
+  _ProductionJollyCircleMarker._();
 
   static final SoldierDesign _design = kProductionSoldierDesignCatalog[5];
   static const double _anchorMotionT = 0.25;
@@ -411,7 +699,6 @@ class _ProductionJollyCircleMarker extends StatelessWidget {
   static final _RoleBottomMetrics _targetBottom = _bottomMetricsForRole(
     SoldierPartStackRole.target,
   );
-  final double motionT;
 
   static double shadowCenterOffsetFromMarkerCenter(double markerBoxSize) {
     final double size = markerBoxSize * 0.39;
@@ -422,62 +709,6 @@ class _ProductionJollyCircleMarker extends StatelessWidget {
     return targetBottomDeltaY + shadowDiameter / 6;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final double size = math.min(constraints.maxWidth, constraints.maxHeight) * 0.39;
-        final double scale = size / _design.paintSize;
-        final Offset contactBottomScreen = Offset(size / 2, size / 2);
-        final Offset targetBottomScreen = Offset(
-          contactBottomScreen.dx + (_targetBottom.point.dx - _contactBottom.point.dx) * scale,
-          contactBottomScreen.dy + (_targetBottom.point.dy - _contactBottom.point.dy) * scale,
-        );
-        final double shadowDiameter = size * 1.05;
-        final Offset shadowOffsetFromCenter = Offset(
-          0,
-          targetBottomScreen.dy + shadowDiameter / 6 - size / 2,
-        );
-
-        return Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            Transform.translate(
-              offset: shadowOffsetFromCenter,
-              child: Transform.scale(
-                scaleY: 1 / 3,
-                alignment: Alignment.center,
-                child: Container(
-                  width: shadowDiameter,
-                  height: shadowDiameter,
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(
-              width: size,
-              height: size,
-              child: CustomPaint(
-                painter: MultiPolygonSoldierPainter(
-                  parts: _design.parts,
-                  displayPalette: SoldierDesignPalette.yellow,
-                  strokeWidth: _design.strokeWidth,
-                  motionT: motionT,
-                  uniformWorldScale: size / _design.paintSize,
-                  fixedModelAnchor: _contactBottom.point,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
- 
   static _RoleBottomMetrics _bottomMetricsForRole(SoldierPartStackRole role) {
     final List<Offset> points = <Offset>[];
     for (final SoldierShapePart part in _design.parts) {
@@ -511,6 +742,88 @@ class _ProductionJollyCircleMarker extends StatelessWidget {
   }
 }
 
+class _ProductionJollyCircleShadow extends StatelessWidget {
+  const _ProductionJollyCircleShadow();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double size = math.min(constraints.maxWidth, constraints.maxHeight) * 0.39;
+        final double scale = size / _ProductionJollyCircleMarker._design.paintSize;
+        final Offset contactBottomScreen = Offset(size / 2, size / 2);
+        final Offset targetBottomScreen = Offset(
+          contactBottomScreen.dx +
+              (_ProductionJollyCircleMarker._targetBottom.point.dx -
+                      _ProductionJollyCircleMarker._contactBottom.point.dx) *
+                  scale,
+          contactBottomScreen.dy +
+              (_ProductionJollyCircleMarker._targetBottom.point.dy -
+                      _ProductionJollyCircleMarker._contactBottom.point.dy) *
+                  scale,
+        );
+        final double shadowDiameter = size * 1.05;
+        final Offset shadowOffsetFromCenter = Offset(
+          0,
+          targetBottomScreen.dy + shadowDiameter / 6 - size / 2,
+        );
+
+        return Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Transform.translate(
+              offset: shadowOffsetFromCenter,
+              child: Transform.scale(
+                scaleY: 1 / 3,
+                alignment: Alignment.center,
+                child: Container(
+                  width: shadowDiameter,
+                  height: shadowDiameter,
+                  decoration: const BoxDecoration(
+                    color: Colors.black,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ProductionJollyCircleBody extends StatelessWidget {
+  const _ProductionJollyCircleBody({
+    required this.motionT,
+  });
+  final double motionT;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double size = math.min(constraints.maxWidth, constraints.maxHeight) * 0.39;
+        return SizedBox(
+          width: size,
+          height: size,
+          child: CustomPaint(
+            painter: MultiPolygonSoldierPainter(
+              parts: _ProductionJollyCircleMarker._design.parts,
+              displayPalette: SoldierDesignPalette.yellow,
+              strokeWidth: _ProductionJollyCircleMarker._design.strokeWidth,
+              motionT: motionT,
+              uniformWorldScale: size / _ProductionJollyCircleMarker._design.paintSize,
+              fixedModelAnchor: _ProductionJollyCircleMarker._contactBottom.point,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _RoleBottomMetrics {
   const _RoleBottomMetrics({
     required this.point,
@@ -519,16 +832,45 @@ class _RoleBottomMetrics {
   final Offset point;
 }
 
+/// Hex fills/outline vs war VFX must composite in separate layers so the shadow
+/// widget can sit between mesh and slime overlays.
+enum _BoardPaintLayer {
+  hexMesh,
+  warEffects,
+}
+
 class _Pseudo3DBoardPainter extends CustomPainter {
   _Pseudo3DBoardPainter({
     required this.boardOffset,
     required this.meshMode,
     required this.zoom,
+    required this.effectT,
+    required this.level4Design,
+    required this.yellowSlimeFrames,
+    required this.fireYellowFrames,
+    required this.redSlimeFrames,
+    required this.blueSlimeFrames,
+    required this.tigerLoseImage,
+    required this.tigerWinImage,
+    required this.eagleLoseImage,
+    required this.dragonLoseImage,
+    required this.paintLayer,
   });
 
   final Offset boardOffset;
   final Pseudo3DMeshMode meshMode;
   final double zoom;
+  final double effectT;
+  final Level4UnitDesign level4Design;
+  final List<ui.Image> yellowSlimeFrames;
+  final List<ui.Image> fireYellowFrames;
+  final List<ui.Image> redSlimeFrames;
+  final List<ui.Image> blueSlimeFrames;
+  final ui.Image? tigerLoseImage;
+  final ui.Image? tigerWinImage;
+  final ui.Image? eagleLoseImage;
+  final ui.Image? dragonLoseImage;
+  final _BoardPaintLayer paintLayer;
   static const double _fixedInnerTransparency = 0.9;
   static const double _fixedInnerScale = 0.847;
 
@@ -552,10 +894,16 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       final Offset worldCenter = localCenter + worldOrigin;
       final _ProjectedHexPolygon? polygon = _projectHex(worldCenter, size);
       if (polygon == null) continue;
+      final int level = _strengthLevel(localCenter);
+      final SoldierDesignPalette faction = _territoryFaction(localCenter);
       projected.add(
         polygon.copyWith(
           fillColor: _territoryOuterColor(localCenter),
           innerColor: _territoryInnerColor(localCenter),
+          level: level,
+          localCenter: localCenter,
+          faction: faction,
+          isWarCell: _isWarCell(localCenter, faction),
         ),
       );
     }
@@ -566,38 +914,145 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     );
 
     for (final _ProjectedHexPolygon polygon in projected) {
-      final Path innerPath = _buildScaledInnerPath(
-        polygon.path,
-        polygon.center,
-        _fixedInnerScale,
-      );
-      final Path fillPath = switch (meshMode) {
-        Pseudo3DMeshMode.outlineTransparent =>
-          Path.combine(PathOperation.difference, polygon.path, innerPath),
-        Pseudo3DMeshMode.outlineHalfTransparent =>
-          Path.combine(PathOperation.difference, polygon.path, innerPath),
-        _ => polygon.path,
-      };
-
-      canvas.drawPath(
-        fillPath,
-        Paint()..color = polygon.fillColor,
-      );
-      if (meshMode == Pseudo3DMeshMode.outlineHalfTransparent) {
-        canvas.drawPath(
-          innerPath,
-          Paint()
-            ..color = polygon.innerColor.withValues(
-              alpha: (1 - _fixedInnerTransparency).clamp(0.0, 1.0),
-            ),
+      if (paintLayer == _BoardPaintLayer.hexMesh) {
+        final Path innerPath = _buildScaledInnerPath(
+          polygon.path,
+          polygon.center,
+          _fixedInnerScale,
         );
+        final Path fillPath = switch (meshMode) {
+          Pseudo3DMeshMode.outlineTransparent =>
+            Path.combine(PathOperation.difference, polygon.path, innerPath),
+          Pseudo3DMeshMode.outlineHalfTransparent =>
+            Path.combine(PathOperation.difference, polygon.path, innerPath),
+          _ => polygon.path,
+        };
+
+        canvas.drawPath(
+          fillPath,
+          Paint()..color = polygon.fillColor,
+        );
+        if (meshMode == Pseudo3DMeshMode.outlineHalfTransparent) {
+          canvas.drawPath(
+            innerPath,
+            Paint()
+              ..color = polygon.innerColor.withValues(
+                alpha: (1 - _fixedInnerTransparency).clamp(0.0, 1.0),
+              ),
+          );
+        }
+        canvas.drawPath(
+          polygon.path,
+          Paint()
+            ..color = Colors.black.withValues(alpha: 0.72)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = math.max(0.9, 2.0 * polygon.strokeScale),
+        );
+      } else if (polygon.isWarCell) {
+        switch (level4Design) {
+          case Level4UnitDesign.defaultSolid:
+            break;
+          case Level4UnitDesign.yLose:
+          case Level4UnitDesign.yWin:
+          case Level4UnitDesign.rLose:
+          case Level4UnitDesign.bLose:
+            if (_shouldShowSlimeLose(polygon)) {
+              _paintSlimeLose(canvas, polygon);
+            }
+            break;
+        }
       }
-      canvas.drawPath(
-        polygon.path,
+    }
+  }
+
+  void _paintSlimeLose(Canvas canvas, _ProjectedHexPolygon polygon) {
+    late final List<ui.Image> frames;
+    late final ui.Image? mascot;
+    switch (level4Design) {
+      case Level4UnitDesign.yLose:
+        frames = yellowSlimeFrames;
+        mascot = tigerLoseImage;
+        break;
+      case Level4UnitDesign.yWin:
+        frames = fireYellowFrames;
+        mascot = tigerWinImage;
+        break;
+      case Level4UnitDesign.rLose:
+        frames = redSlimeFrames;
+        mascot = eagleLoseImage;
+        break;
+      case Level4UnitDesign.bLose:
+        frames = blueSlimeFrames;
+        mascot = dragonLoseImage;
+        break;
+      default:
+        return;
+    }
+    if (frames.isEmpty) {
+      return;
+    }
+    final Rect bounds = polygon.path.getBounds();
+    const double frameDuration = 0.15;
+    final double animT = effectT % (frames.length * frameDuration);
+    final int frameIndex =
+        (animT / frameDuration).floor().clamp(0, frames.length - 1);
+    final ui.Image frame = frames[frameIndex];
+    final double imageAspect = frame.width / frame.height;
+    final double destHeight = bounds.height * 1.7 * 1.15;
+    final double destWidth = destHeight * imageAspect;
+    final Offset pivotTarget = bounds.center.translate(0, bounds.height * 0.08);
+    final Rect dest = Rect.fromLTWH(
+      pivotTarget.dx - destWidth * 0.5,
+      pivotTarget.dy - destHeight * 0.75 + destHeight * 0.05,
+      destWidth,
+      destHeight,
+    );
+    canvas.drawImageRect(
+      frame,
+      Rect.fromLTWH(0, 0, frame.width.toDouble(), frame.height.toDouble()),
+      dest,
+      Paint()..filterQuality = FilterQuality.high,
+    );
+    if (mascot != null) {
+      final ui.Image overlay = mascot;
+      final double overlayAspect = overlay.width / overlay.height;
+      double overlayHeight = destHeight * 1.6 * 0.7;
+      double overlayWidth = overlayHeight * overlayAspect;
+      late final double left;
+      late final double top;
+      switch (level4Design) {
+        case Level4UnitDesign.yLose:
+          left = pivotTarget.dx - overlayWidth * 0.5 + overlayWidth * 0.06;
+          top = pivotTarget.dy - overlayHeight * 0.75;
+          break;
+        case Level4UnitDesign.rLose:
+          left = pivotTarget.dx - overlayWidth * 0.5 + overlayWidth * 0.06;
+          top = pivotTarget.dy - overlayHeight * 0.75 + overlayHeight * 0.09;
+          break;
+        case Level4UnitDesign.bLose:
+          overlayHeight *= 1.06;
+          overlayWidth = overlayHeight * overlayAspect;
+          left =
+              pivotTarget.dx - overlayWidth * 0.5 + overlayWidth * 0.06 - overlayWidth * 0.03;
+          top = pivotTarget.dy - overlayHeight * 0.75 + overlayHeight * 0.12;
+          break;
+        default:
+          left = pivotTarget.dx - overlayWidth * 0.5 + overlayWidth * 0.06;
+          top = pivotTarget.dy - overlayHeight * 0.75;
+      }
+      final Rect overlayDest = Rect.fromLTWH(
+        left,
+        top,
+        overlayWidth,
+        overlayHeight,
+      );
+      canvas.drawImageRect(
+        overlay,
+        Rect.fromLTWH(0, 0, overlay.width.toDouble(), overlay.height.toDouble()),
+        overlayDest,
         Paint()
-          ..color = Colors.black.withValues(alpha: 0.72)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = math.max(0.9, 2.0 * polygon.strokeScale),
+          ..filterQuality = FilterQuality.high
+          ..blendMode = BlendMode.srcOver,
       );
     }
   }
@@ -693,6 +1148,38 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   }
 
   ({Color outer, Color inner}) _territoryPalette(Offset center) {
+    int tierForLevel(int level) {
+      return switch (level) {
+        4 => 1,
+        3 => 2,
+        2 => 3,
+        _ => 4,
+      };
+    }
+
+    final int level = _strengthLevel(center);
+    final int tier = tierForLevel(level);
+    final SoldierDesignPalette faction = _territoryFaction(center);
+
+    if (faction == SoldierDesignPalette.red) {
+      return (
+        outer: factionTierList(SoldierDesignPalette.red)[tier - 1],
+        inner: factionTierList(SoldierDesignPalette.red)[tier - 1],
+      );
+    }
+    if (faction == SoldierDesignPalette.yellow) {
+      return (
+        outer: factionTierList(SoldierDesignPalette.yellow)[tier - 1],
+        inner: factionTierList(SoldierDesignPalette.yellow)[tier - 1],
+      );
+    }
+    return (
+      outer: factionTierList(SoldierDesignPalette.blue)[tier - 1],
+      inner: factionTierList(SoldierDesignPalette.blue)[tier - 1],
+    );
+  }
+
+  SoldierDesignPalette _territoryFaction(Offset center) {
     final Offset n = Offset(
       (center.dx / (_landExtentX * 2)) + 0.5,
       (center.dy / (landExtentY * 2)) + 0.5,
@@ -707,47 +1194,78 @@ class _Pseudo3DBoardPainter extends CustomPainter {
 
     final double red =
         score(const Offset(0.16, 0.38), 0.9) + math.sin(n.dy * 9.5) * 0.03;
-    final double yellow =
-        score(const Offset(0.5, 0.48), 0.86) + math.cos((n.dx + n.dy) * 8.5) * 0.035;
+    final double yellow = score(const Offset(0.5, 0.48), 0.86) +
+        math.cos((n.dx + n.dy) * 8.5) * 0.035;
     final double blue =
         score(const Offset(0.82, 0.42), 0.92) + math.sin(n.dx * 10.0) * 0.03;
 
-    int strengthLevel(Offset localCenter) {
-      final int q = (localCenter.dx / (_baseRadius * 1.5)).round();
-      final int r =
-          ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
-      final int hash = ((q * 92821) ^ (r * 68917) ^ 0x5A17) & 0x7fffffff;
-      return (hash % 4) + 1;
-    }
-
-    int tierForLevel(int level) {
-      return switch (level) {
-        4 => 1,
-        3 => 2,
-        2 => 3,
-        _ => 4,
-      };
-    }
-
-    final int level = strengthLevel(center);
-    final int tier = tierForLevel(level);
-
     if (red >= yellow && red >= blue) {
-      return (
-        outer: factionTierList(SoldierDesignPalette.red)[tier - 1],
-        inner: factionTierList(SoldierDesignPalette.red)[tier - 1],
-      );
+      return SoldierDesignPalette.red;
     }
     if (yellow >= red && yellow >= blue) {
-      return (
-        outer: factionTierList(SoldierDesignPalette.yellow)[tier - 1],
-        inner: factionTierList(SoldierDesignPalette.yellow)[tier - 1],
-      );
+      return SoldierDesignPalette.yellow;
     }
-    return (
-      outer: factionTierList(SoldierDesignPalette.blue)[tier - 1],
-      inner: factionTierList(SoldierDesignPalette.blue)[tier - 1],
-    );
+    return SoldierDesignPalette.blue;
+  }
+
+  static int _strengthLevel(Offset localCenter) {
+    final int q = (localCenter.dx / (_baseRadius * 1.5)).round();
+    final int r =
+        ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
+    final int hash = ((q * 92821) ^ (r * 68917) ^ 0x5A17) & 0x7fffffff;
+    return (hash % 4) + 1;
+  }
+
+  bool _isWarCell(Offset localCenter, SoldierDesignPalette faction) {
+    final int q = (localCenter.dx / (_baseRadius * 1.5)).round();
+    final int r =
+        ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
+    const List<(int, int)> neighbors = <(int, int)>[
+      (1, 0),
+      (1, -1),
+      (0, -1),
+      (-1, 0),
+      (-1, 1),
+      (0, 1),
+    ];
+    for (final (int dq, int dr) in neighbors) {
+      final Offset? neighborCenter =
+          _baseLandCentersByAxial[_HexAxial(q + dq, r + dr)];
+      if (neighborCenter == null) continue;
+      if (_territoryFaction(neighborCenter) != faction) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _isSlimeLoseTenPercentSlot(int q, int r, Level4UnitDesign design) {
+    final int salt = switch (design) {
+      Level4UnitDesign.defaultSolid => 0x594F,
+      Level4UnitDesign.yLose => 0x594F,
+      Level4UnitDesign.yWin => 0x6D31,
+      Level4UnitDesign.rLose => 0x52E4,
+      Level4UnitDesign.bLose => 0x8142,
+    };
+    final int hash = ((q * 92821) ^ (r * 68917) ^ salt) & 0x7fffffff;
+    return (hash % 10) == 0;
+  }
+
+  bool _shouldShowSlimeLose(_ProjectedHexPolygon polygon) {
+    final Offset? local = polygon.localCenter;
+    if (local == null) return false;
+    final int q = (local.dx / (_baseRadius * 1.5)).round();
+    final int r =
+        ((local.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
+    return _isSlimeLoseTenPercentSlot(q, r, level4Design);
+  }
+
+  bool _isMagicCell(Offset localCenter) {
+    final int q = (localCenter.dx / (_baseRadius * 1.5)).round();
+    final int r =
+        ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
+    final int hash = ((q * 73856093) ^ (r * 19349663) ^ 0x1BADC0DE) & 0x7fffffff;
+    return (hash % 17) == 0;
   }
 
   static Offset initialOffsetForViewport(
@@ -981,11 +1499,31 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   bool shouldRepaint(covariant _Pseudo3DBoardPainter oldDelegate) {
     return oldDelegate.boardOffset != boardOffset ||
         oldDelegate.meshMode != meshMode ||
-        oldDelegate.zoom != zoom;
+        oldDelegate.zoom != zoom ||
+        oldDelegate.effectT != effectT ||
+        oldDelegate.level4Design != level4Design ||
+        oldDelegate.yellowSlimeFrames != yellowSlimeFrames ||
+        oldDelegate.fireYellowFrames != fireYellowFrames ||
+        oldDelegate.redSlimeFrames != redSlimeFrames ||
+        oldDelegate.blueSlimeFrames != blueSlimeFrames ||
+        oldDelegate.tigerLoseImage != tigerLoseImage ||
+        oldDelegate.tigerWinImage != tigerWinImage ||
+        oldDelegate.eagleLoseImage != eagleLoseImage ||
+        oldDelegate.dragonLoseImage != dragonLoseImage ||
+        oldDelegate.paintLayer != paintLayer;
   }
 
   static const double _landExtentX = _baseRadius * (1 + 1.5 * (_landSideHexes - 1));
   static final List<Offset> _baseLandTileCenters = _buildLandTileCenters();
+  static final Map<_HexAxial, Offset> _baseLandCentersByAxial = <_HexAxial, Offset>{
+    for (final Offset center in _baseLandTileCenters)
+      _HexAxial(
+        (center.dx / (_baseRadius * 1.5)).round(),
+        ((center.dy / (_baseRadius * math.sqrt(3))) -
+                (center.dx / (_baseRadius * 1.5)).round() / 2)
+            .round(),
+      ): center,
+  };
   static const List<Offset> _hexLocalVertices = <Offset>[
     Offset(_baseRadius, 0),
     Offset(_baseRadius * 0.5, _hexHalfHeight),
@@ -1034,6 +1572,10 @@ class _ProjectedHexPolygon {
     required this.fillColor,
     required this.innerColor,
     required this.center,
+    this.level = 1,
+    this.localCenter,
+    this.faction,
+    this.isWarCell = false,
   });
 
   final Path path;
@@ -1042,6 +1584,10 @@ class _ProjectedHexPolygon {
   final Color fillColor;
   final Color innerColor;
   final Offset center;
+  final int level;
+  final Offset? localCenter;
+  final SoldierDesignPalette? faction;
+  final bool isWarCell;
 
   _ProjectedHexPolygon copyWith({
     Path? path,
@@ -1050,6 +1596,10 @@ class _ProjectedHexPolygon {
     Color? fillColor,
     Color? innerColor,
     Offset? center,
+    int? level,
+    Offset? localCenter,
+    SoldierDesignPalette? faction,
+    bool? isWarCell,
   }) {
     return _ProjectedHexPolygon(
       path: path ?? this.path,
@@ -1058,6 +1608,24 @@ class _ProjectedHexPolygon {
       fillColor: fillColor ?? this.fillColor,
       innerColor: innerColor ?? this.innerColor,
       center: center ?? this.center,
+      level: level ?? this.level,
+      localCenter: localCenter ?? this.localCenter,
+      faction: faction ?? this.faction,
+      isWarCell: isWarCell ?? this.isWarCell,
     );
   }
+}
+
+class _HexAxial {
+  const _HexAxial(this.q, this.r);
+
+  final int q;
+  final int r;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _HexAxial && other.q == q && other.r == r;
+
+  @override
+  int get hashCode => Object.hash(q, r);
 }
