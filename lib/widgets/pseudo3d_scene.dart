@@ -22,6 +22,7 @@ class Pseudo3DScene extends StatefulWidget {
     this.viewportWidthFactor = 0.94,
     this.maxViewportWidth = 980,
     this.level4Design = Level4UnitDesign.defaultSolid,
+    this.level4EffectTune = const Level4EffectTune(),
   });
 
   final Pseudo3DMeshMode meshMode;
@@ -31,6 +32,7 @@ class Pseudo3DScene extends StatefulWidget {
   final double viewportWidthFactor;
   final double maxViewportWidth;
   final Level4UnitDesign level4Design;
+  final Level4EffectTune level4EffectTune;
 
   @override
   State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
@@ -46,8 +48,140 @@ enum Level4UnitDesign {
   defaultSolid,
   yLose,
   yWin,
+  rWin,
+  bWin,
   rLose,
   bLose,
+}
+
+/// Temporary tuning knobs for Level 4 war VFX (per-design in UI).
+///
+/// [animPivotX]/[animPivotY] and [mascotPivotX]/[mascotPivotY] are normalized
+/// (0–1) in **texture** space with **local origin (0,0) at the top-left** of
+/// the full image (same as [Canvas.drawImageRect] `src` rect). (1,1) is
+/// bottom-right. The point at that fraction of the **drawn** width/height is
+/// pinned to the hex [pivotTarget].
+class Level4EffectTune {
+  const Level4EffectTune({
+    this.animScaleX = 1.0,
+    this.animScaleY = 1.0,
+    this.animPivotX = 0.5,
+    this.animPivotY = 0.7,
+    this.mascotScale = 1.0,
+    this.mascotPivotX = 0.5,
+    this.mascotPivotY = 0.75,
+  });
+
+  final double animScaleX;
+  final double animScaleY;
+  /// 0–1: horizontal pivot on the animated sprite (left → right).
+  final double animPivotX;
+  /// 0–1: vertical pivot on the animated sprite (top → bottom).
+  final double animPivotY;
+  final double mascotScale;
+  /// 0–1: horizontal pivot on the mascot overlay.
+  final double mascotPivotX;
+  /// 0–1: vertical pivot on the mascot overlay.
+  final double mascotPivotY;
+
+  Level4EffectTune copyWith({
+    double? animScaleX,
+    double? animScaleY,
+    double? animPivotX,
+    double? animPivotY,
+    double? mascotScale,
+    double? mascotPivotX,
+    double? mascotPivotY,
+  }) {
+    return Level4EffectTune(
+      animScaleX: animScaleX ?? this.animScaleX,
+      animScaleY: animScaleY ?? this.animScaleY,
+      animPivotX: animPivotX ?? this.animPivotX,
+      animPivotY: animPivotY ?? this.animPivotY,
+      mascotScale: mascotScale ?? this.mascotScale,
+      mascotPivotX: mascotPivotX ?? this.mascotPivotX,
+      mascotPivotY: mascotPivotY ?? this.mascotPivotY,
+    );
+  }
+
+  static bool sameValues(Level4EffectTune a, Level4EffectTune b) {
+    bool e(double x, double y) => (x - y).abs() < 1e-6;
+    return e(a.animScaleX, b.animScaleX) &&
+        e(a.animScaleY, b.animScaleY) &&
+        e(a.animPivotX, b.animPivotX) &&
+        e(a.animPivotY, b.animPivotY) &&
+        e(a.mascotScale, b.mascotScale) &&
+        e(a.mascotPivotX, b.mascotPivotX) &&
+        e(a.mascotPivotY, b.mascotPivotY);
+  }
+
+  /// Shipped defaults per Level 4 animation (sliders start from these).
+  static Level4EffectTune forDesign(Level4UnitDesign design) {
+    switch (design) {
+      case Level4UnitDesign.rWin:
+        return const Level4EffectTune(
+          animScaleX: 1.0,
+          animScaleY: 1.0,
+          animPivotX: 0.537,
+          animPivotY: 0.619,
+          mascotScale: 1.14,
+          mascotPivotX: 0.409,
+          mascotPivotY: 0.846,
+        );
+      case Level4UnitDesign.rLose:
+        return const Level4EffectTune(
+          animScaleX: 1.21,
+          animScaleY: 1.42,
+          animPivotX: 0.492,
+          animPivotY: 0.73,
+          mascotScale: 1.14,
+          mascotPivotX: 0.475,
+          mascotPivotY: 0.619,
+        );
+      case Level4UnitDesign.yWin:
+        return const Level4EffectTune(
+          animScaleX: 1.42,
+          animScaleY: 1.21,
+          animPivotX: 0.5,
+          animPivotY: 0.685,
+          mascotScale: 1.19,
+          mascotPivotX: 0.566,
+          mascotPivotY: 0.895,
+        );
+      case Level4UnitDesign.yLose:
+        return const Level4EffectTune(
+          animScaleX: 1.21,
+          animScaleY: 1.42,
+          animPivotX: 0.492,
+          animPivotY: 0.73,
+          mascotScale: 1.06,
+          mascotPivotX: 0.5,
+          mascotPivotY: 0.73,
+        );
+      case Level4UnitDesign.bWin:
+        return const Level4EffectTune(
+          animScaleX: 1.0,
+          animScaleY: 1.4,
+          animPivotX: 0.5,
+          animPivotY: 0.578,
+          mascotScale: 0.98,
+          mascotPivotX: 0.467,
+          mascotPivotY: 0.763,
+        );
+      case Level4UnitDesign.bLose:
+        return const Level4EffectTune(
+          animScaleX: 1.21,
+          animScaleY: 1.42,
+          animPivotX: 0.492,
+          animPivotY: 0.73,
+          mascotScale: 1.12,
+          mascotPivotX: 0.5,
+          mascotPivotY: 0.619,
+        );
+      case Level4UnitDesign.defaultSolid:
+        return const Level4EffectTune();
+    }
+  }
 }
 
 class _Pseudo3DSceneState extends State<Pseudo3DScene>
@@ -80,6 +214,10 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   final List<ui.Image> _yellowSlimeFrames = <ui.Image>[];
   bool _fireYellowFramesLoadingStarted = false;
   final List<ui.Image> _fireYellowFrames = <ui.Image>[];
+  bool _tornadoRedFramesLoadingStarted = false;
+  final List<ui.Image> _tornadoRedFrames = <ui.Image>[];
+  bool _tornadoIceFramesLoadingStarted = false;
+  final List<ui.Image> _tornadoIceFrames = <ui.Image>[];
   bool _redSlimeFramesLoadingStarted = false;
   final List<ui.Image> _redSlimeFrames = <ui.Image>[];
   bool _blueSlimeFramesLoadingStarted = false;
@@ -90,8 +228,12 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   ui.Image? _tigerWinImage;
   bool _eagleLoseLoadingStarted = false;
   ui.Image? _eagleLoseImage;
+  bool _eagleWinLoadingStarted = false;
+  ui.Image? _eagleWinImage;
   bool _dragonLoseLoadingStarted = false;
   ui.Image? _dragonLoseImage;
+  bool _dragonWinLoadingStarted = false;
+  ui.Image? _dragonWinImage;
 
   @override
   void initState() {
@@ -136,6 +278,24 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
         frameCount: 6,
       );
     }
+    if (!_tornadoRedFramesLoadingStarted) {
+      _tornadoRedFramesLoadingStarted = true;
+      _loadFrames(
+        prefix: 'image/tornado red ',
+        suffix: '.png',
+        target: _tornadoRedFrames,
+        frameCount: 6,
+      );
+    }
+    if (!_tornadoIceFramesLoadingStarted) {
+      _tornadoIceFramesLoadingStarted = true;
+      _loadFrames(
+        prefix: 'image/ice blue ',
+        suffix: '.png',
+        target: _tornadoIceFrames,
+        frameCount: 6,
+      );
+    }
     if (!_tigerLoseLoadingStarted) {
       _tigerLoseLoadingStarted = true;
       _loadTigerLose();
@@ -148,9 +308,17 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
       _eagleLoseLoadingStarted = true;
       _loadEagleLose();
     }
+    if (!_eagleWinLoadingStarted) {
+      _eagleWinLoadingStarted = true;
+      _loadEagleWin();
+    }
     if (!_dragonLoseLoadingStarted) {
       _dragonLoseLoadingStarted = true;
       _loadDragonLose();
+    }
+    if (!_dragonWinLoadingStarted) {
+      _dragonWinLoadingStarted = true;
+      _loadDragonWin();
     }
   }
 
@@ -233,6 +401,29 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     }
   }
 
+  Future<void> _loadEagleWin() async {
+    try {
+      final ByteData data = await rootBundle.load('image/eagle_win.png');
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(),
+      );
+      final ui.FrameInfo frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      setState(() {
+        _eagleWinImage?.dispose();
+        _eagleWinImage = frame.image;
+      });
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('Pseudo3DScene: failed loading image/eagle_win.png: $e');
+        debugPrint('$st');
+      }
+    }
+  }
+
   Future<void> _loadEagleLose() async {
     try {
       final ByteData data = await rootBundle.load('image/eagle_lose.png');
@@ -251,6 +442,29 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('Pseudo3DScene: failed loading image/eagle_lose.png: $e');
+        debugPrint('$st');
+      }
+    }
+  }
+
+  Future<void> _loadDragonWin() async {
+    try {
+      final ByteData data = await rootBundle.load('image/dragon_win.png');
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(),
+      );
+      final ui.FrameInfo frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      setState(() {
+        _dragonWinImage?.dispose();
+        _dragonWinImage = frame.image;
+      });
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('Pseudo3DScene: failed loading image/dragon_win.png: $e');
         debugPrint('$st');
       }
     }
@@ -481,7 +695,9 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     _tigerLoseImage?.dispose();
     _tigerWinImage?.dispose();
     _eagleLoseImage?.dispose();
+    _eagleWinImage?.dispose();
     _dragonLoseImage?.dispose();
+    _dragonWinImage?.dispose();
     super.dispose();
   }
 
@@ -566,14 +782,19 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         zoom: _zoom,
                         effectT: _effectT,
                         level4Design: widget.level4Design,
+                        level4EffectTune: widget.level4EffectTune,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
+                        tornadoRedFrames: _tornadoRedFrames,
+                        tornadoIceFrames: _tornadoIceFrames,
                         redSlimeFrames: _redSlimeFrames,
                         blueSlimeFrames: _blueSlimeFrames,
                         tigerLoseImage: _tigerLoseImage,
                         tigerWinImage: _tigerWinImage,
                         eagleLoseImage: _eagleLoseImage,
+                        eagleWinImage: _eagleWinImage,
                         dragonLoseImage: _dragonLoseImage,
+                        dragonWinImage: _dragonWinImage,
                         paintLayer: _BoardPaintLayer.hexMesh,
                       ),
                     ),
@@ -617,14 +838,19 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         zoom: _zoom,
                         effectT: _effectT,
                         level4Design: widget.level4Design,
+                        level4EffectTune: widget.level4EffectTune,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
+                        tornadoRedFrames: _tornadoRedFrames,
+                        tornadoIceFrames: _tornadoIceFrames,
                         redSlimeFrames: _redSlimeFrames,
                         blueSlimeFrames: _blueSlimeFrames,
                         tigerLoseImage: _tigerLoseImage,
                         tigerWinImage: _tigerWinImage,
                         eagleLoseImage: _eagleLoseImage,
+                        eagleWinImage: _eagleWinImage,
                         dragonLoseImage: _dragonLoseImage,
+                        dragonWinImage: _dragonWinImage,
                         paintLayer: _BoardPaintLayer.warEffects,
                       ),
                     ),
@@ -846,14 +1072,19 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     required this.zoom,
     required this.effectT,
     required this.level4Design,
+    required this.level4EffectTune,
     required this.yellowSlimeFrames,
     required this.fireYellowFrames,
+    required this.tornadoRedFrames,
+    required this.tornadoIceFrames,
     required this.redSlimeFrames,
     required this.blueSlimeFrames,
     required this.tigerLoseImage,
     required this.tigerWinImage,
     required this.eagleLoseImage,
+    required this.eagleWinImage,
     required this.dragonLoseImage,
+    required this.dragonWinImage,
     required this.paintLayer,
   });
 
@@ -862,15 +1093,33 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   final double zoom;
   final double effectT;
   final Level4UnitDesign level4Design;
+  final Level4EffectTune level4EffectTune;
   final List<ui.Image> yellowSlimeFrames;
   final List<ui.Image> fireYellowFrames;
+  final List<ui.Image> tornadoRedFrames;
+  final List<ui.Image> tornadoIceFrames;
   final List<ui.Image> redSlimeFrames;
   final List<ui.Image> blueSlimeFrames;
   final ui.Image? tigerLoseImage;
   final ui.Image? tigerWinImage;
   final ui.Image? eagleLoseImage;
+  final ui.Image? eagleWinImage;
   final ui.Image? dragonLoseImage;
+  final ui.Image? dragonWinImage;
   final _BoardPaintLayer paintLayer;
+
+  static bool _isWinBattleEffect(Level4UnitDesign design) {
+    return design == Level4UnitDesign.yWin ||
+        design == Level4UnitDesign.rWin ||
+        design == Level4UnitDesign.bWin;
+  }
+
+  /// Full `src` rect for [Canvas.drawImageRect]: texture local position (0,0),
+  /// size = image pixel dimensions. All war VFX sprites use this (no cropped src).
+  static Rect _imageSrcRectAtLocalOrigin(ui.Image image) {
+    return Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+  }
+
   static const double _fixedInnerTransparency = 0.9;
   static const double _fixedInnerScale = 0.847;
 
@@ -954,6 +1203,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
             break;
           case Level4UnitDesign.yLose:
           case Level4UnitDesign.yWin:
+          case Level4UnitDesign.rWin:
+          case Level4UnitDesign.bWin:
           case Level4UnitDesign.rLose:
           case Level4UnitDesign.bLose:
             if (_shouldShowSlimeLose(polygon)) {
@@ -977,6 +1228,14 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         frames = fireYellowFrames;
         mascot = tigerWinImage;
         break;
+      case Level4UnitDesign.rWin:
+        frames = tornadoRedFrames;
+        mascot = eagleWinImage;
+        break;
+      case Level4UnitDesign.bWin:
+        frames = tornadoIceFrames;
+        mascot = dragonWinImage;
+        break;
       case Level4UnitDesign.rLose:
         frames = redSlimeFrames;
         mascot = eagleLoseImage;
@@ -992,54 +1251,55 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       return;
     }
     final Rect bounds = polygon.path.getBounds();
-    const double frameDuration = 0.15;
+    const double frameDuration = 0.15 / 0.75;
     final double animT = effectT % (frames.length * frameDuration);
     final int frameIndex =
         (animT / frameDuration).floor().clamp(0, frames.length - 1);
     final ui.Image frame = frames[frameIndex];
     final double imageAspect = frame.width / frame.height;
-    final double destHeight = bounds.height * 1.7 * 1.15;
-    final double destWidth = destHeight * imageAspect;
+    final double baseAnimH = bounds.height * 1.7 * 1.15;
+    final double baseAnimW = baseAnimH * imageAspect;
     final Offset pivotTarget = bounds.center.translate(0, bounds.height * 0.08);
-    final Rect dest = Rect.fromLTWH(
-      pivotTarget.dx - destWidth * 0.5,
-      pivotTarget.dy - destHeight * 0.75 + destHeight * 0.05,
-      destWidth,
-      destHeight,
-    );
+    final Level4EffectTune tune = level4EffectTune;
+    double animW = baseAnimW;
+    double animH = baseAnimH;
+    if (_isWinBattleEffect(level4Design)) {
+      animW *= 1.4;
+      animH *= 1.4;
+    }
+    animW *= tune.animScaleX;
+    animH *= tune.animScaleY;
+    double animLeft = pivotTarget.dx - tune.animPivotX * animW;
+    double animTop = pivotTarget.dy - tune.animPivotY * animH;
+    if (_isWinBattleEffect(level4Design)) {
+      animTop -= 0.2 * animH;
+    }
+    final Rect dest = Rect.fromLTWH(animLeft, animTop, animW, animH);
     canvas.drawImageRect(
       frame,
-      Rect.fromLTWH(0, 0, frame.width.toDouble(), frame.height.toDouble()),
+      _imageSrcRectAtLocalOrigin(frame),
       dest,
       Paint()..filterQuality = FilterQuality.high,
     );
     if (mascot != null) {
       final ui.Image overlay = mascot;
       final double overlayAspect = overlay.width / overlay.height;
-      double overlayHeight = destHeight * 1.6 * 0.7;
+      double overlayHeight = baseAnimH * 1.6 * 0.7;
       double overlayWidth = overlayHeight * overlayAspect;
-      late final double left;
-      late final double top;
       switch (level4Design) {
-        case Level4UnitDesign.yLose:
-          left = pivotTarget.dx - overlayWidth * 0.5 + overlayWidth * 0.06;
-          top = pivotTarget.dy - overlayHeight * 0.75;
-          break;
-        case Level4UnitDesign.rLose:
-          left = pivotTarget.dx - overlayWidth * 0.5 + overlayWidth * 0.06;
-          top = pivotTarget.dy - overlayHeight * 0.75 + overlayHeight * 0.09;
-          break;
         case Level4UnitDesign.bLose:
           overlayHeight *= 1.06;
           overlayWidth = overlayHeight * overlayAspect;
-          left =
-              pivotTarget.dx - overlayWidth * 0.5 + overlayWidth * 0.06 - overlayWidth * 0.03;
-          top = pivotTarget.dy - overlayHeight * 0.75 + overlayHeight * 0.12;
           break;
         default:
-          left = pivotTarget.dx - overlayWidth * 0.5 + overlayWidth * 0.06;
-          top = pivotTarget.dy - overlayHeight * 0.75;
+          break;
       }
+      overlayWidth *= tune.mascotScale;
+      overlayHeight *= tune.mascotScale;
+      final double left =
+          pivotTarget.dx - tune.mascotPivotX * overlayWidth;
+      final double top =
+          pivotTarget.dy - tune.mascotPivotY * overlayHeight;
       final Rect overlayDest = Rect.fromLTWH(
         left,
         top,
@@ -1048,7 +1308,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       );
       canvas.drawImageRect(
         overlay,
-        Rect.fromLTWH(0, 0, overlay.width.toDouble(), overlay.height.toDouble()),
+        _imageSrcRectAtLocalOrigin(overlay),
         overlayDest,
         Paint()
           ..filterQuality = FilterQuality.high
@@ -1244,6 +1504,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       Level4UnitDesign.defaultSolid => 0x594F,
       Level4UnitDesign.yLose => 0x594F,
       Level4UnitDesign.yWin => 0x6D31,
+      Level4UnitDesign.rWin => 0x7A2C,
+      Level4UnitDesign.bWin => 0x6E8F,
       Level4UnitDesign.rLose => 0x52E4,
       Level4UnitDesign.bLose => 0x8142,
     };
@@ -1502,14 +1764,22 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         oldDelegate.zoom != zoom ||
         oldDelegate.effectT != effectT ||
         oldDelegate.level4Design != level4Design ||
+        !Level4EffectTune.sameValues(
+          oldDelegate.level4EffectTune,
+          level4EffectTune,
+        ) ||
         oldDelegate.yellowSlimeFrames != yellowSlimeFrames ||
         oldDelegate.fireYellowFrames != fireYellowFrames ||
+        oldDelegate.tornadoRedFrames != tornadoRedFrames ||
+        oldDelegate.tornadoIceFrames != tornadoIceFrames ||
         oldDelegate.redSlimeFrames != redSlimeFrames ||
         oldDelegate.blueSlimeFrames != blueSlimeFrames ||
         oldDelegate.tigerLoseImage != tigerLoseImage ||
         oldDelegate.tigerWinImage != tigerWinImage ||
         oldDelegate.eagleLoseImage != eagleLoseImage ||
+        oldDelegate.eagleWinImage != eagleWinImage ||
         oldDelegate.dragonLoseImage != dragonLoseImage ||
+        oldDelegate.dragonWinImage != dragonWinImage ||
         oldDelegate.paintLayer != paintLayer;
   }
 

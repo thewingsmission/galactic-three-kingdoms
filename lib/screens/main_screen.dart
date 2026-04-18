@@ -36,6 +36,30 @@ class _MainScreenState extends State<MainScreen> {
   );
   Level4UnitDesign _level4Design = Level4UnitDesign.defaultSolid;
 
+  final Map<Level4UnitDesign, Level4EffectTune> _level4Tunes =
+      <Level4UnitDesign, Level4EffectTune>{
+    Level4UnitDesign.yLose: Level4EffectTune.forDesign(Level4UnitDesign.yLose),
+    Level4UnitDesign.yWin: Level4EffectTune.forDesign(Level4UnitDesign.yWin),
+    Level4UnitDesign.rWin: Level4EffectTune.forDesign(Level4UnitDesign.rWin),
+    Level4UnitDesign.bWin: Level4EffectTune.forDesign(Level4UnitDesign.bWin),
+    Level4UnitDesign.rLose: Level4EffectTune.forDesign(Level4UnitDesign.rLose),
+    Level4UnitDesign.bLose: Level4EffectTune.forDesign(Level4UnitDesign.bLose),
+  };
+
+  Level4EffectTune get _level4TuneForSelection {
+    return _level4Tunes[_level4Design] ??
+        Level4EffectTune.forDesign(Level4UnitDesign.defaultSolid);
+  }
+
+  void _setLevel4Tune(Level4EffectTune tune) {
+    if (_level4Design == Level4UnitDesign.defaultSolid) {
+      return;
+    }
+    setState(() {
+      _level4Tunes[_level4Design] = tune;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -52,9 +76,22 @@ class _MainScreenState extends State<MainScreen> {
                     boardBottomInset: 0,
                     viewportHeightFactor: 0.92,
                     level4Design: _level4Design,
+                    level4EffectTune: _level4TuneForSelection,
                   ),
                 ),
               ],
+            ),
+          ),
+          Positioned(
+            top: 12,
+            left: 12,
+            child: SafeArea(
+              bottom: false,
+              child: _Level4TuneSliders(
+                enabled: _level4Design != Level4UnitDesign.defaultSolid,
+                tune: _level4TuneForSelection,
+                onChanged: _setLevel4Tune,
+              ),
             ),
           ),
           Positioned(
@@ -86,6 +123,135 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _Level4TuneSliders extends StatelessWidget {
+  const _Level4TuneSliders({
+    required this.enabled,
+    required this.tune,
+    required this.onChanged,
+  });
+
+  final bool enabled;
+  final Level4EffectTune tune;
+  final ValueChanged<Level4EffectTune> onChanged;
+
+  static const double _scaleMin = 0.05;
+  static const double _scaleMax = 3.0;
+  static const double _pivotMin = 0.0;
+  static const double _pivotMax = 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle labelStyle = Theme.of(context).textTheme.labelSmall!.copyWith(
+          color: Colors.white.withValues(alpha: enabled ? 0.92 : 0.45),
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        );
+
+    Widget row(
+      String label,
+      double value,
+      double min,
+      double max,
+      String Function(double) format,
+      void Function(double) apply,
+    ) {
+      return Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            SizedBox(width: 38, child: Text(label, style: labelStyle)),
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 2,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                ),
+                child: Slider(
+                  value: value.clamp(min, max),
+                  min: min,
+                  max: max,
+                  onChanged: enabled ? (double v) => apply(v) : null,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 50,
+              child: Text(
+                format(value),
+                textAlign: TextAlign.right,
+                style: labelStyle,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final Widget panel = Container(
+      width: 320,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0C1220).withValues(alpha: 0.84),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            'VFX tune (${enabled ? "active" : "pick animation"})',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.55),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 6),
+          row('1 sx', tune.animScaleX, _scaleMin, _scaleMax,
+              (double v) => v.toStringAsFixed(2), (double v) {
+            onChanged(tune.copyWith(animScaleX: v));
+          }),
+          row('2 sy', tune.animScaleY, _scaleMin, _scaleMax,
+              (double v) => v.toStringAsFixed(2), (double v) {
+            onChanged(tune.copyWith(animScaleY: v));
+          }),
+          row('3 apx', tune.animPivotX, _pivotMin, _pivotMax,
+              (double v) => v.toStringAsFixed(3), (double v) {
+            onChanged(tune.copyWith(animPivotX: v));
+          }),
+          row('4 apy', tune.animPivotY, _pivotMin, _pivotMax,
+              (double v) => v.toStringAsFixed(3), (double v) {
+            onChanged(tune.copyWith(animPivotY: v));
+          }),
+          row('5 ms', tune.mascotScale, _scaleMin, _scaleMax,
+              (double v) => v.toStringAsFixed(2), (double v) {
+            onChanged(tune.copyWith(mascotScale: v));
+          }),
+          row('6 mpx', tune.mascotPivotX, _pivotMin, _pivotMax,
+              (double v) => v.toStringAsFixed(3), (double v) {
+            onChanged(tune.copyWith(mascotPivotX: v));
+          }),
+          row('7 mpy', tune.mascotPivotY, _pivotMin, _pivotMax,
+              (double v) => v.toStringAsFixed(3), (double v) {
+            onChanged(tune.copyWith(mascotPivotY: v));
+          }),
+        ],
+      ),
+    );
+
+    return SizedBox(
+      width: 160,
+      child: FittedBox(
+        fit: BoxFit.fitWidth,
+        alignment: Alignment.topLeft,
+        child: SizedBox(width: 320, child: panel),
       ),
     );
   }
@@ -133,7 +299,7 @@ class _Level4DesignPicker extends StatelessWidget {
     }
 
     return Container(
-      width: 480,
+      width: 280,
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: const Color(0xFF0C1220).withValues(alpha: 0.84),
@@ -146,17 +312,39 @@ class _Level4DesignPicker extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          buildButton('Default', Level4UnitDesign.defaultSolid),
-          const SizedBox(width: 6),
-          buildButton('Y Lose', Level4UnitDesign.yLose),
-          const SizedBox(width: 6),
-          buildButton('Y Win', Level4UnitDesign.yWin),
-          const SizedBox(width: 6),
-          buildButton('R Lose', Level4UnitDesign.rLose),
-          const SizedBox(width: 6),
-          buildButton('B Lose', Level4UnitDesign.bLose),
+          Row(
+            children: <Widget>[
+              buildButton('Default', Level4UnitDesign.defaultSolid),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: <Widget>[
+              buildButton('R Win', Level4UnitDesign.rWin),
+              const SizedBox(width: 6),
+              buildButton('R Lose', Level4UnitDesign.rLose),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: <Widget>[
+              buildButton('Y Win', Level4UnitDesign.yWin),
+              const SizedBox(width: 6),
+              buildButton('Y Lose', Level4UnitDesign.yLose),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: <Widget>[
+              buildButton('B Win', Level4UnitDesign.bWin),
+              const SizedBox(width: 6),
+              buildButton('B Lose', Level4UnitDesign.bLose),
+            ],
+          ),
         ],
       ),
     );
