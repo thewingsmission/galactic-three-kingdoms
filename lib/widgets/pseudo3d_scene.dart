@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+export '../models/level4_war_vfx.dart';
+
+import '../models/level4_war_vfx.dart';
 import '../models/soldier_design.dart';
 import '../models/soldier_design_palette.dart';
 import '../models/soldier_faction_color_theme.dart';
@@ -21,8 +24,6 @@ class Pseudo3DScene extends StatefulWidget {
     this.maxViewportHeight = 540,
     this.viewportWidthFactor = 0.94,
     this.maxViewportWidth = 980,
-    this.level4Design = Level4UnitDesign.defaultSolid,
-    this.level4EffectTune = const Level4EffectTune(),
   });
 
   final Pseudo3DMeshMode meshMode;
@@ -31,8 +32,6 @@ class Pseudo3DScene extends StatefulWidget {
   final double maxViewportHeight;
   final double viewportWidthFactor;
   final double maxViewportWidth;
-  final Level4UnitDesign level4Design;
-  final Level4EffectTune level4EffectTune;
 
   @override
   State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
@@ -42,146 +41,6 @@ enum Pseudo3DMeshMode {
   solid,
   outlineTransparent,
   outlineHalfTransparent,
-}
-
-enum Level4UnitDesign {
-  defaultSolid,
-  yLose,
-  yWin,
-  rWin,
-  bWin,
-  rLose,
-  bLose,
-}
-
-/// Temporary tuning knobs for Level 4 war VFX (per-design in UI).
-///
-/// [animPivotX]/[animPivotY] and [mascotPivotX]/[mascotPivotY] are normalized
-/// (0–1) in **texture** space with **local origin (0,0) at the top-left** of
-/// the full image (same as [Canvas.drawImageRect] `src` rect). (1,1) is
-/// bottom-right. The point at that fraction of the **drawn** width/height is
-/// pinned to the hex [pivotTarget].
-class Level4EffectTune {
-  const Level4EffectTune({
-    this.animScaleX = 1.0,
-    this.animScaleY = 1.0,
-    this.animPivotX = 0.5,
-    this.animPivotY = 0.7,
-    this.mascotScale = 1.0,
-    this.mascotPivotX = 0.5,
-    this.mascotPivotY = 0.75,
-  });
-
-  final double animScaleX;
-  final double animScaleY;
-  /// 0–1: horizontal pivot on the animated sprite (left → right).
-  final double animPivotX;
-  /// 0–1: vertical pivot on the animated sprite (top → bottom).
-  final double animPivotY;
-  final double mascotScale;
-  /// 0–1: horizontal pivot on the mascot overlay.
-  final double mascotPivotX;
-  /// 0–1: vertical pivot on the mascot overlay.
-  final double mascotPivotY;
-
-  Level4EffectTune copyWith({
-    double? animScaleX,
-    double? animScaleY,
-    double? animPivotX,
-    double? animPivotY,
-    double? mascotScale,
-    double? mascotPivotX,
-    double? mascotPivotY,
-  }) {
-    return Level4EffectTune(
-      animScaleX: animScaleX ?? this.animScaleX,
-      animScaleY: animScaleY ?? this.animScaleY,
-      animPivotX: animPivotX ?? this.animPivotX,
-      animPivotY: animPivotY ?? this.animPivotY,
-      mascotScale: mascotScale ?? this.mascotScale,
-      mascotPivotX: mascotPivotX ?? this.mascotPivotX,
-      mascotPivotY: mascotPivotY ?? this.mascotPivotY,
-    );
-  }
-
-  static bool sameValues(Level4EffectTune a, Level4EffectTune b) {
-    bool e(double x, double y) => (x - y).abs() < 1e-6;
-    return e(a.animScaleX, b.animScaleX) &&
-        e(a.animScaleY, b.animScaleY) &&
-        e(a.animPivotX, b.animPivotX) &&
-        e(a.animPivotY, b.animPivotY) &&
-        e(a.mascotScale, b.mascotScale) &&
-        e(a.mascotPivotX, b.mascotPivotX) &&
-        e(a.mascotPivotY, b.mascotPivotY);
-  }
-
-  /// Shipped defaults per Level 4 animation (sliders start from these).
-  static Level4EffectTune forDesign(Level4UnitDesign design) {
-    switch (design) {
-      case Level4UnitDesign.rWin:
-        return const Level4EffectTune(
-          animScaleX: 1.0,
-          animScaleY: 1.0,
-          animPivotX: 0.537,
-          animPivotY: 0.619,
-          mascotScale: 1.14,
-          mascotPivotX: 0.409,
-          mascotPivotY: 0.846,
-        );
-      case Level4UnitDesign.rLose:
-        return const Level4EffectTune(
-          animScaleX: 1.21,
-          animScaleY: 1.42,
-          animPivotX: 0.492,
-          animPivotY: 0.73,
-          mascotScale: 1.14,
-          mascotPivotX: 0.475,
-          mascotPivotY: 0.619,
-        );
-      case Level4UnitDesign.yWin:
-        return const Level4EffectTune(
-          animScaleX: 1.42,
-          animScaleY: 1.21,
-          animPivotX: 0.5,
-          animPivotY: 0.685,
-          mascotScale: 1.19,
-          mascotPivotX: 0.566,
-          mascotPivotY: 0.895,
-        );
-      case Level4UnitDesign.yLose:
-        return const Level4EffectTune(
-          animScaleX: 1.21,
-          animScaleY: 1.42,
-          animPivotX: 0.492,
-          animPivotY: 0.73,
-          mascotScale: 1.06,
-          mascotPivotX: 0.5,
-          mascotPivotY: 0.73,
-        );
-      case Level4UnitDesign.bWin:
-        return const Level4EffectTune(
-          animScaleX: 1.0,
-          animScaleY: 1.4,
-          animPivotX: 0.5,
-          animPivotY: 0.578,
-          mascotScale: 0.98,
-          mascotPivotX: 0.467,
-          mascotPivotY: 0.763,
-        );
-      case Level4UnitDesign.bLose:
-        return const Level4EffectTune(
-          animScaleX: 1.21,
-          animScaleY: 1.42,
-          animPivotX: 0.492,
-          animPivotY: 0.73,
-          mascotScale: 1.12,
-          mascotPivotX: 0.5,
-          mascotPivotY: 0.619,
-        );
-      case Level4UnitDesign.defaultSolid:
-        return const Level4EffectTune();
-    }
-  }
 }
 
 class _Pseudo3DSceneState extends State<Pseudo3DScene>
@@ -781,8 +640,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         meshMode: widget.meshMode,
                         zoom: _zoom,
                         effectT: _effectT,
-                        level4Design: widget.level4Design,
-                        level4EffectTune: widget.level4EffectTune,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -837,8 +694,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         meshMode: widget.meshMode,
                         zoom: _zoom,
                         effectT: _effectT,
-                        level4Design: widget.level4Design,
-                        level4EffectTune: widget.level4EffectTune,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -1071,8 +926,6 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     required this.meshMode,
     required this.zoom,
     required this.effectT,
-    required this.level4Design,
-    required this.level4EffectTune,
     required this.yellowSlimeFrames,
     required this.fireYellowFrames,
     required this.tornadoRedFrames,
@@ -1092,8 +945,6 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   final Pseudo3DMeshMode meshMode;
   final double zoom;
   final double effectT;
-  final Level4UnitDesign level4Design;
-  final Level4EffectTune level4EffectTune;
   final List<ui.Image> yellowSlimeFrames;
   final List<ui.Image> fireYellowFrames;
   final List<ui.Image> tornadoRedFrames;
@@ -1112,6 +963,31 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     return design == Level4UnitDesign.yWin ||
         design == Level4UnitDesign.rWin ||
         design == Level4UnitDesign.bWin;
+  }
+
+  /// Win clips: 6 frames × 3 loops; Lose clips: 9 frames × 2 loops → LCM = 18 steps.
+  static const double _level4FrameDurationSec = 0.15 / 0.75;
+  static const int _level4SyncedSteps = 18;
+  static const double _level4PauseSec = 1.2;
+  static const double _level4ScaleInDurationSec = 0.22;
+  static const double _level4ScaleOutDurationSec = 0.22;
+
+  /// 0→1 at cycle start, 1→0 before pause; scales around [pivotScreen].
+  static double _level4VisibilityScale(
+    double tInActive,
+    double activeDuration,
+  ) {
+    if (tInActive < _level4ScaleInDurationSec) {
+      final double u =
+          (tInActive / _level4ScaleInDurationSec).clamp(0.0, 1.0);
+      return Curves.easeOut.transform(u);
+    }
+    if (tInActive > activeDuration - _level4ScaleOutDurationSec) {
+      final double u = ((activeDuration - tInActive) / _level4ScaleOutDurationSec)
+          .clamp(0.0, 1.0);
+      return Curves.easeIn.transform(u);
+    }
+    return 1.0;
   }
 
   /// Full `src` rect for [Canvas.drawImageRect]: texture local position (0,0),
@@ -1197,29 +1073,24 @@ class _Pseudo3DBoardPainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = math.max(0.9, 2.0 * polygon.strokeScale),
         );
-      } else if (polygon.isWarCell) {
-        switch (level4Design) {
-          case Level4UnitDesign.defaultSolid:
-            break;
-          case Level4UnitDesign.yLose:
-          case Level4UnitDesign.yWin:
-          case Level4UnitDesign.rWin:
-          case Level4UnitDesign.bWin:
-          case Level4UnitDesign.rLose:
-          case Level4UnitDesign.bLose:
-            if (_shouldShowSlimeLose(polygon)) {
-              _paintSlimeLose(canvas, polygon);
-            }
-            break;
-        }
+      } else if (polygon.isWarCell && _shouldShowBoundaryWarVfx(polygon)) {
+        _paintSlimeLose(canvas, polygon);
       }
     }
   }
 
   void _paintSlimeLose(Canvas canvas, _ProjectedHexPolygon polygon) {
+    final Offset? local = polygon.localCenter;
+    if (local == null) {
+      return;
+    }
+    final int q = (local.dx / (_baseRadius * 1.5)).round();
+    final int r =
+        ((local.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
+    final Level4UnitDesign design = warAnimationDesignForCell(q, r);
     late final List<ui.Image> frames;
     late final ui.Image? mascot;
-    switch (level4Design) {
+    switch (design) {
       case Level4UnitDesign.yLose:
         frames = yellowSlimeFrames;
         mascot = tigerLoseImage;
@@ -1244,26 +1115,39 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         frames = blueSlimeFrames;
         mascot = dragonLoseImage;
         break;
-      default:
+      case Level4UnitDesign.defaultSolid:
         return;
     }
     if (frames.isEmpty) {
       return;
     }
-    final Rect bounds = polygon.path.getBounds();
-    const double frameDuration = 0.15 / 0.75;
-    final double animT = effectT % (frames.length * frameDuration);
-    final int frameIndex =
-        (animT / frameDuration).floor().clamp(0, frames.length - 1);
+    final double activeDuration =
+        _level4SyncedSteps * _level4FrameDurationSec;
+    final double cycleDuration = activeDuration + _level4PauseSec;
+    final double tInCycle = effectT % cycleDuration;
+    if (tInCycle >= activeDuration) {
+      return;
+    }
+    final double visibilityScale =
+        _level4VisibilityScale(tInCycle, activeDuration);
+    if (visibilityScale < 1e-5) {
+      return;
+    }
+    final int step =
+        (tInCycle / _level4FrameDurationSec).floor().clamp(0, _level4SyncedSteps - 1);
+    final int frameIndex = _isWinBattleEffect(design)
+        ? step % 6
+        : step % 9;
     final ui.Image frame = frames[frameIndex];
+    final Rect bounds = polygon.path.getBounds();
     final double imageAspect = frame.width / frame.height;
     final double baseAnimH = bounds.height * 1.7 * 1.15;
     final double baseAnimW = baseAnimH * imageAspect;
     final Offset pivotTarget = bounds.center.translate(0, bounds.height * 0.08);
-    final Level4EffectTune tune = level4EffectTune;
+    final Level4EffectTune tune = Level4EffectTune.forDesign(design);
     double animW = baseAnimW;
     double animH = baseAnimH;
-    if (_isWinBattleEffect(level4Design)) {
+    if (_isWinBattleEffect(design)) {
       animW *= 1.4;
       animH *= 1.4;
     }
@@ -1271,10 +1155,14 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     animH *= tune.animScaleY;
     double animLeft = pivotTarget.dx - tune.animPivotX * animW;
     double animTop = pivotTarget.dy - tune.animPivotY * animH;
-    if (_isWinBattleEffect(level4Design)) {
+    if (_isWinBattleEffect(design)) {
       animTop -= 0.2 * animH;
     }
     final Rect dest = Rect.fromLTWH(animLeft, animTop, animW, animH);
+    canvas.save();
+    canvas.translate(pivotTarget.dx, pivotTarget.dy);
+    canvas.scale(visibilityScale);
+    canvas.translate(-pivotTarget.dx, -pivotTarget.dy);
     canvas.drawImageRect(
       frame,
       _imageSrcRectAtLocalOrigin(frame),
@@ -1286,7 +1174,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       final double overlayAspect = overlay.width / overlay.height;
       double overlayHeight = baseAnimH * 1.6 * 0.7;
       double overlayWidth = overlayHeight * overlayAspect;
-      switch (level4Design) {
+      switch (design) {
         case Level4UnitDesign.bLose:
           overlayHeight *= 1.06;
           overlayWidth = overlayHeight * overlayAspect;
@@ -1315,6 +1203,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
           ..blendMode = BlendMode.srcOver,
       );
     }
+    canvas.restore();
   }
 
   _ProjectedHexPolygon? _projectHex(Offset worldCenter, Size size) {
@@ -1499,27 +1388,22 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     return false;
   }
 
-  static bool _isSlimeLoseTenPercentSlot(int q, int r, Level4UnitDesign design) {
-    final int salt = switch (design) {
-      Level4UnitDesign.defaultSolid => 0x594F,
-      Level4UnitDesign.yLose => 0x594F,
-      Level4UnitDesign.yWin => 0x6D31,
-      Level4UnitDesign.rWin => 0x7A2C,
-      Level4UnitDesign.bWin => 0x6E8F,
-      Level4UnitDesign.rLose => 0x52E4,
-      Level4UnitDesign.bLose => 0x8142,
-    };
+  /// ~30% of boundary war cells show VFX (same hash scheme as before; was 10%).
+  static bool _isBoundaryWarVfxSlot(int q, int r) {
+    const int salt = 0x594F;
     final int hash = ((q * 92821) ^ (r * 68917) ^ salt) & 0x7fffffff;
-    return (hash % 10) == 0;
+    return (hash % 10) < 3;
   }
 
-  bool _shouldShowSlimeLose(_ProjectedHexPolygon polygon) {
+  bool _shouldShowBoundaryWarVfx(_ProjectedHexPolygon polygon) {
     final Offset? local = polygon.localCenter;
-    if (local == null) return false;
+    if (local == null) {
+      return false;
+    }
     final int q = (local.dx / (_baseRadius * 1.5)).round();
     final int r =
         ((local.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
-    return _isSlimeLoseTenPercentSlot(q, r, level4Design);
+    return _isBoundaryWarVfxSlot(q, r);
   }
 
   bool _isMagicCell(Offset localCenter) {
@@ -1763,11 +1647,6 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         oldDelegate.meshMode != meshMode ||
         oldDelegate.zoom != zoom ||
         oldDelegate.effectT != effectT ||
-        oldDelegate.level4Design != level4Design ||
-        !Level4EffectTune.sameValues(
-          oldDelegate.level4EffectTune,
-          level4EffectTune,
-        ) ||
         oldDelegate.yellowSlimeFrames != yellowSlimeFrames ||
         oldDelegate.fireYellowFrames != fireYellowFrames ||
         oldDelegate.tornadoRedFrames != tornadoRedFrames ||
