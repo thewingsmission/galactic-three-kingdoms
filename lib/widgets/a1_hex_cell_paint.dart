@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/cell_core_palette.dart';
-import 'hex_cell_preview_layout.dart';
 
 /// **A1** hex art: rim, outer echoes, inner corner triangles ([CellCorePalette]).
 ///
@@ -175,69 +174,6 @@ class A1HexCellPaint {
 
     final double unit = cornerTriangleUnitForMap(outerRadius);
     paintInnerCornerTriangles(canvas, iv, unit, palette.highlight);
-
-    canvas.restore();
-  }
-
-  static void paintCenteredReference(
-    Canvas canvas,
-    Size size, {
-    required CellCorePalette palette,
-  }) {
-    final Offset c = HexCellPreviewLayout.center(size);
-    final double scale = HexCellPreviewLayout.scale(size);
-    final double rThickOuter = HexCellPreviewLayout.outerRadius(size);
-    final double rHole = rThickOuter * (42.0 / 56.0);
-    final double hh = rThickOuter * 0.8660254;
-    final List<Offset> thickOuterVerts = <Offset>[
-      c + Offset(rThickOuter, 0),
-      c + Offset(rThickOuter * 0.5, hh),
-      c + Offset(-rThickOuter * 0.5, hh),
-      c + Offset(-rThickOuter, 0),
-      c + Offset(-rThickOuter * 0.5, -hh),
-      c + Offset(rThickOuter * 0.5, -hh),
-    ];
-    final List<Offset> holeVerts = <Offset>[
-      c + Offset(rHole, 0),
-      c + Offset(rHole * 0.5, rHole * 0.8660254),
-      c + Offset(-rHole * 0.5, rHole * 0.8660254),
-      c + Offset(-rHole, 0),
-      c + Offset(-rHole * 0.5, -rHole * 0.8660254),
-      c + Offset(rHole * 0.5, -rHole * 0.8660254),
-    ];
-    final Path thickOuterPath = _pathFromVerts(thickOuterVerts);
-    final Path holePath = _pathFromVerts(holeVerts);
-    final Path thickRing =
-        Path.combine(PathOperation.difference, thickOuterPath, holePath);
-
-    canvas.save();
-    canvas.clipPath(thickOuterPath);
-
-    canvas.drawPath(holePath, Paint()..color = palette.innerHexHolePaint);
-
-    canvas.drawPath(thickRing, Paint()..color = palette.ring);
-
-    final double step = 5.5 * scale;
-    final double minR = rHole + 6.0 * scale;
-    final double strokeW = math.max(1.0, 1.15 * scale);
-    for (int k = 0; k < _thinRingCount; k++) {
-      final double r = (rThickOuter - step * (k + 1)).clamp(minR, rThickOuter);
-      final double h = r * 0.8660254;
-      final Path thin = _pathFromVerts(<Offset>[
-        c + Offset(r, 0),
-        c + Offset(r * 0.5, h),
-        c + Offset(-r * 0.5, h),
-        c + Offset(-r, 0),
-        c + Offset(-r * 0.5, -h),
-        c + Offset(r * 0.5, -h),
-      ]);
-      canvas.drawPath(
-        thin,
-        _thinStrokePaint(strokeW, palette.highlight),
-      );
-    }
-
-    paintInnerCornerTriangles(canvas, holeVerts, scale, palette.highlight);
 
     canvas.restore();
   }

@@ -5,10 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
-import '../models/hex_cell_preview_style.dart';
 import '../models/soldier_design_palette.dart';
 import '../models/soldier_faction_color_theme.dart';
-import '../widgets/hex_cell_demo_panel.dart';
 import '../widgets/pseudo3d_scene.dart';
 
 class MainScreen extends StatefulWidget {
@@ -28,9 +26,6 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  /// Side panel preview only; the map always paints **L1…L4** by territory strength level.
-  HexCellPreviewStyle _cellVisualStyle = HexCellPreviewStyle.defaultStyle;
-
   static const _HexGlowConfig _hexGlowConfig = _HexGlowConfig(
     outerRadiusScale: 0.71,
     innerRadiusScale: 0.61,
@@ -43,48 +38,30 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Stack(
+        fit: StackFit.expand,
         children: <Widget>[
-          Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                const _GalacticBackground(
-                  designIndex: 0,
-                ),
-                Positioned.fill(
-                  child: SafeArea(
-                    child: Pseudo3DScene(
-                      meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
-                      boardBottomInset: 0,
-                      viewportHeightFactor: 0.92,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: _BottomRibbon(
-                    designIndex: 0,
-                    onOpenDesigns: widget.onOpenDesigns,
-                    onOpenInventory: widget.onOpenInventory,
-                    onOpenWar: widget.onOpenWar,
-                  ),
-                ),
-              ],
+          const _GalacticBackground(
+            designIndex: 0,
+          ),
+          Positioned.fill(
+            child: SafeArea(
+              child: Pseudo3DScene(
+                meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
+                boardBottomInset: 0,
+                viewportHeightFactor: 0.92,
+              ),
             ),
           ),
-          SizedBox(
-            width: 260,
-            child: HexCellDemoPanel(
-              style: _cellVisualStyle,
-              onStyleChanged: (HexCellPreviewStyle s) {
-                setState(() {
-                  _cellVisualStyle = s;
-                });
-              },
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _BottomRibbon(
+              designIndex: 0,
+              onOpenDesigns: widget.onOpenDesigns,
+              onOpenInventory: widget.onOpenInventory,
+              onOpenWar: widget.onOpenWar,
             ),
           ),
         ],

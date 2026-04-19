@@ -2,8 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Shared geometry for the black **cell preview** (Default, A1, A2, …)
-/// share the same outer hex footprint (56 px radius at 150 px reference extent).
+/// Shared pointy-top hex geometry for strategic-map cells and outline painting
+/// (56 px radius at 150 px reference extent).
 class HexCellPreviewLayout {
   HexCellPreviewLayout._();
 
@@ -56,23 +56,6 @@ class HexCellPreviewLayout {
         ..color = Colors.black.withValues(alpha: unifiedOutlineBlackAlpha)
         ..style = PaintingStyle.stroke
         ..strokeWidth = unifiedOutlineStrokeWidth(strokeScale),
-    );
-  }
-
-  /// Cell footprint on the top preview layer — **always** light green (independent of core theme).
-  static const Color boundaryOutline = Color(0xFF90EE90);
-
-  static void paintBoundaryOutline(Canvas canvas, Size size) {
-    final Offset c = center(size);
-    final double r = outerRadius(size);
-    final Path p = pathFromVerts(pointyTopVerts(c, r));
-    final double sw = math.max(1.5, 2.0 * scale(size));
-    canvas.drawPath(
-      p,
-      Paint()
-        ..color = boundaryOutline
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = sw,
     );
   }
 }

@@ -3,13 +3,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/cell_core_palette.dart';
-import '../models/core_color_theme.dart';
 import '../models/hex_cell_preview_style.dart';
 import '../models/soldier_design_palette.dart';
 import 'a1_hex_cell_paint.dart';
 import 'hex_cell_preview_layout.dart';
 
-/// Preview + map paints for default, **L1**, **L2**–**L4**, **A1**, **A2** (L1 default mesh on map).
+/// Strategic map paints: **L1**–**L4**, **A1**, **A2** ([HexCellStylesPaint.paintProjectedCell]).
 class HexCellStylesPaint {
   HexCellStylesPaint._();
 
@@ -26,9 +25,6 @@ class HexCellStylesPaint {
   static const double _a2RingDeltaT = 0.063979;
 
   static const Color _a2BlackRing = Color(0xFF000000);
-
-  /// Inner hex boundaries between A2 bands (not the unified outer rim).
-  static const double _a2InnerLineWidthPreview = 0.2;
 
   /// A2: swap fill pattern `[#1,#3,#1]` ↔ `[#3,#1,#3]` on this cadence (seconds).
   static const double a2ThemeSwapPeriodSec = 0.45;
@@ -53,22 +49,10 @@ class HexCellStylesPaint {
   /// Public alias for L2–L4 second-ring thickness (same as [_l2SecondRingDeltaT]).
   static const double l2SecondRingDeltaT = _l2SecondRingDeltaT;
 
-  static Color l2AccentForCoreTheme(CoreColorTheme t) => switch (t) {
-        CoreColorTheme.red => _l2AccentRed,
-        CoreColorTheme.yellow => _l2AccentYellow,
-        CoreColorTheme.blue => _l2AccentBlue,
-      };
-
   static Color l2AccentForSoldierPalette(SoldierDesignPalette p) => switch (p) {
         SoldierDesignPalette.red => _l2AccentRed,
         SoldierDesignPalette.yellow => _l2AccentYellow,
         SoldierDesignPalette.blue => _l2AccentBlue,
-      };
-
-  static Color l4TriangleForCoreTheme(CoreColorTheme t) => switch (t) {
-        CoreColorTheme.red => _l4TriangleRed,
-        CoreColorTheme.yellow => _l4TriangleYellow,
-        CoreColorTheme.blue => _l4TriangleBlue,
       };
 
   static Color l4TriangleForSoldierPalette(SoldierDesignPalette p) => switch (p) {
@@ -164,21 +148,6 @@ class HexCellStylesPaint {
     }
   }
 
-  /// Same pixels as **L1** for this outer hex (thick **#1** + default inner hole).
-  static void _paintL1FromOuterVerts(
-    Canvas canvas,
-    Offset center,
-    List<Offset> outerVertices,
-    CellCorePalette palette,
-  ) {
-    final Path outer = _path(outerVertices);
-    final Path inner = _innerPath(outer, center);
-    final Path fillPath =
-        Path.combine(PathOperation.difference, outer, inner);
-    canvas.drawPath(fillPath, Paint()..color = palette.componentIndex1);
-    canvas.drawPath(inner, Paint()..color = palette.innerHexHolePaint);
-  }
-
   /// L2–L4: outer **#1** fixed; inner band [l2AccentColor].
   /// [paintCornerParallelograms]: **L3**/**L4**; off for **L2**.
   /// [innerCornerTriangleUnit]: **L4** only — **A1**-style triangles on inner-hole vertices.
@@ -249,14 +218,6 @@ class HexCellStylesPaint {
     canvas.restore();
   }
 
-  static Path _innerPath(Path outer, Offset c) {
-    final Matrix4 m = Matrix4.identity()
-      ..translate(c.dx, c.dy)
-      ..scale(_innerT, _innerT)
-      ..translate(-c.dx, -c.dy);
-    return outer.transform(m.storage);
-  }
-
   static List<Offset> _scaledVerts(
     Offset center,
     List<Offset> outerVertices,
@@ -323,76 +284,6 @@ class HexCellStylesPaint {
       );
     }
     canvas.restore();
-  }
-
-  /// Preview cell art only (unified black + green outline drawn by [HexCellPreviewPainter]).
-  static void paintPreviewContent(
-    Canvas canvas,
-    Size size,
-    HexCellPreviewStyle style, {
-    required CoreColorTheme coreTheme,
-    bool a2SwapThemeRings = false,
-  }) {
-    final CellCorePalette pal = coreTheme.cellPalette;
-    switch (style) {
-      case HexCellPreviewStyle.defaultStyle:
-        _paintDefaultPreview(canvas, size, pal);
-        return;
-      case HexCellPreviewStyle.l1:
-        _paintL1Preview(canvas, size, pal);
-        return;
-      case HexCellPreviewStyle.l2:
-        final Offset lc = HexCellPreviewLayout.center(size);
-        final double lr = HexCellPreviewLayout.outerRadius(size);
-        _paintL2HexRings(
-          canvas,
-          lc,
-          HexCellPreviewLayout.pointyTopVerts(lc, lr),
-          pal,
-          l2AccentColor: l2AccentForCoreTheme(coreTheme),
-          paintCornerParallelograms: false,
-        );
-        return;
-      case HexCellPreviewStyle.l3:
-        final Offset l3c = HexCellPreviewLayout.center(size);
-        final double l3r = HexCellPreviewLayout.outerRadius(size);
-        _paintL2HexRings(
-          canvas,
-          l3c,
-          HexCellPreviewLayout.pointyTopVerts(l3c, l3r),
-          pal,
-          l2AccentColor: l2AccentForCoreTheme(coreTheme),
-        );
-        return;
-      case HexCellPreviewStyle.l4:
-        final Offset l4c = HexCellPreviewLayout.center(size);
-        final double l4r = HexCellPreviewLayout.outerRadius(size);
-        _paintL2HexRings(
-          canvas,
-          l4c,
-          HexCellPreviewLayout.pointyTopVerts(l4c, l4r),
-          pal,
-          l2AccentColor: l2AccentForCoreTheme(coreTheme),
-          innerCornerTriangleUnit: HexCellPreviewLayout.scale(size),
-          l4TriangleFill: l4TriangleForCoreTheme(coreTheme),
-        );
-        return;
-      case HexCellPreviewStyle.a1:
-        A1HexCellPaint.paintCenteredReference(canvas, size, palette: pal);
-        return;
-      case HexCellPreviewStyle.a2:
-        final Offset c = HexCellPreviewLayout.center(size);
-        final double r = HexCellPreviewLayout.outerRadius(size);
-        _paintA2HexRings(
-          canvas,
-          c,
-          HexCellPreviewLayout.pointyTopVerts(c, r),
-          pal,
-          innerBoundaryStrokeWidth: _a2InnerLineWidthPreview,
-          swapThemeRings: a2SwapThemeRings,
-        );
-        return;
-    }
   }
 
   /// Strategic map: variant styles; default uses fill path in [Pseudo3DBoardPainter].
@@ -464,38 +355,5 @@ class HexCellStylesPaint {
         );
         return;
     }
-  }
-
-  static void _paintDefaultPreview(
-    Canvas canvas,
-    Size size,
-    CellCorePalette pal,
-  ) {
-    final Offset c = HexCellPreviewLayout.center(size);
-    final double r = HexCellPreviewLayout.outerRadius(size);
-    final List<Offset> verts = HexCellPreviewLayout.pointyTopVerts(c, r);
-    final Path outer = _path(verts);
-    final Path inner = _innerPath(outer, c);
-    final Path fillPath =
-        Path.combine(PathOperation.difference, outer, inner);
-
-    canvas.drawPath(fillPath, Paint()..color = pal.ring);
-    canvas.drawPath(inner, Paint()..color = pal.innerHexHolePaint);
-  }
-
-  /// Default layout; thick ring + inner use faction ramp index **1** ([CellCorePalette.componentIndex1]).
-  static void _paintL1Preview(
-    Canvas canvas,
-    Size size,
-    CellCorePalette pal,
-  ) {
-    final Offset c = HexCellPreviewLayout.center(size);
-    final double r = HexCellPreviewLayout.outerRadius(size);
-    _paintL1FromOuterVerts(
-      canvas,
-      c,
-      HexCellPreviewLayout.pointyTopVerts(c, r),
-      pal,
-    );
   }
 }

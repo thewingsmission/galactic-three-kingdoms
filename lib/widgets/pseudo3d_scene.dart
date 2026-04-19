@@ -1399,12 +1399,23 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     return SoldierDesignPalette.blue;
   }
 
+  /// Per-cell (stable) strength: **60%** L1, **25%** L2, **12%** L3, **3%** L4.
   static int _strengthLevel(Offset localCenter) {
     final int q = (localCenter.dx / (_baseRadius * 1.5)).round();
     final int r =
         ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
     final int hash = ((q * 92821) ^ (r * 68917) ^ 0x5A17) & 0x7fffffff;
-    return (hash % 4) + 1;
+    final int bucket = hash % 100;
+    if (bucket < 60) {
+      return 1;
+    }
+    if (bucket < 85) {
+      return 2;
+    }
+    if (bucket < 97) {
+      return 3;
+    }
+    return 4;
   }
 
   bool _isWarCell(Offset localCenter, SoldierDesignPalette faction) {

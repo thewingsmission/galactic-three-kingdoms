@@ -1,4 +1,4 @@
-/// Visual style for hex cells on the strategic map and the black preview panel.
+/// Strategic-map hex paint variant (territory strength → **L1…L4** via [hexCellStyleForStrengthLevel]).
 enum HexCellPreviewStyle {
   /// Faction-colored ring (original map look).
   defaultStyle,
@@ -20,18 +20,6 @@ enum HexCellPreviewStyle {
 
   /// A2: fills **#1,#3,#1** ↔ **#3,#1,#3** every 0.45s (black strokes on ring edges).
   a2,
-}
-
-extension HexCellPreviewStyleLabel on HexCellPreviewStyle {
-  String get label => switch (this) {
-        HexCellPreviewStyle.defaultStyle => 'Default',
-        HexCellPreviewStyle.l1 => 'L1',
-        HexCellPreviewStyle.l2 => 'L2',
-        HexCellPreviewStyle.l3 => 'L3',
-        HexCellPreviewStyle.l4 => 'L4',
-        HexCellPreviewStyle.a1 => 'A1',
-        HexCellPreviewStyle.a2 => 'A2',
-      };
 }
 
 extension HexCellPreviewStylePaint on HexCellPreviewStyle {
