@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../models/hex_cell_preview_style.dart';
 import '../models/soldier_design_palette.dart';
 import '../models/soldier_faction_color_theme.dart';
+import '../widgets/hex_cell_demo_panel.dart';
 import '../widgets/pseudo3d_scene.dart';
 
 class MainScreen extends StatefulWidget {
@@ -26,6 +28,8 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  HexCellPreviewStyle _cellVisualStyle = HexCellPreviewStyle.defaultStyle;
+
   static const _HexGlowConfig _hexGlowConfig = _HexGlowConfig(
     outerRadiusScale: 0.71,
     innerRadiusScale: 0.61,
@@ -38,34 +42,49 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const _GalacticBackground(designIndex: 0),
-          SafeArea(
+          Expanded(
             child: Stack(
+              fit: StackFit.expand,
               children: <Widget>[
+                const _GalacticBackground(
+                  designIndex: 0,
+                ),
                 Positioned.fill(
-                  child: Pseudo3DScene(
-                    meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
-                    boardBottomInset: 0,
-                    viewportHeightFactor: 0.92,
+                  child: SafeArea(
+                    child: Pseudo3DScene(
+                      meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
+                      boardBottomInset: 0,
+                      viewportHeightFactor: 0.92,
+                      cellVisualStyle: _cellVisualStyle,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _BottomRibbon(
+                    designIndex: 0,
+                    onOpenDesigns: widget.onOpenDesigns,
+                    onOpenInventory: widget.onOpenInventory,
+                    onOpenWar: widget.onOpenWar,
                   ),
                 ),
               ],
             ),
           ),
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: SizedBox(
-              width: MediaQuery.of(context).size.width,
-              child: _BottomRibbon(
-                designIndex: 0,
-                onOpenDesigns: widget.onOpenDesigns,
-                onOpenInventory: widget.onOpenInventory,
-                onOpenWar: widget.onOpenWar,
-              ),
+          SizedBox(
+            width: 260,
+            child: HexCellDemoPanel(
+              style: _cellVisualStyle,
+              onStyleChanged: (HexCellPreviewStyle s) {
+                setState(() {
+                  _cellVisualStyle = s;
+                });
+              },
             ),
           ),
         ],
@@ -1047,7 +1066,16 @@ class _BottomRibbon extends StatelessWidget {
   }
 
   Widget _buildSpeedTabs(BuildContext context, List<_RibbonAction> actions) {
-    final List<double> yOffsets = <double>[4, 2, 0, -2, -4];
+    final List<double> yOffsets = List<double>.generate(
+      actions.length,
+      (int i) {
+        if (actions.length <= 1) {
+          return 0;
+        }
+        final double t = i / (actions.length - 1);
+        return 4.0 - 8.0 * t;
+      },
+    );
     return SizedBox(
       height: 124,
       child: Stack(
@@ -1245,7 +1273,7 @@ class _BottomRibbon extends StatelessWidget {
                 label: action.label,
                 onTap: action.onTap,
                 width: 66,
-                topOffset: yOffsets[index],
+                topOffset: yOffsets[index % yOffsets.length],
                 gap: 6,
                 labelStyle: _labelStyle(context, color: Colors.white.withValues(alpha: 0.92)),
                 button: SizedBox(
@@ -1404,7 +1432,7 @@ class _BottomRibbon extends StatelessWidget {
                 label: action.label,
                 onTap: action.onTap,
                 width: 66,
-                topOffset: yOffsets[index],
+                topOffset: yOffsets[index % yOffsets.length],
                 gap: 6,
                 labelStyle: _labelStyle(
                   context,
@@ -1544,7 +1572,7 @@ class _BottomRibbon extends StatelessWidget {
                 label: action.label,
                 onTap: action.onTap,
                 width: 68,
-                topOffset: yOffsets[index],
+                topOffset: yOffsets[index % yOffsets.length],
                 gap: 7,
                 labelStyle: _labelStyle(
                   context,

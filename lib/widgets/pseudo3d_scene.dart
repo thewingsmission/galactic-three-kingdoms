@@ -8,10 +8,14 @@ import 'package:flutter/services.dart';
 
 export '../models/level4_war_vfx.dart';
 
+import '../models/cell_core_palette.dart';
+import '../models/hex_cell_preview_style.dart';
 import '../models/level4_war_vfx.dart';
 import '../models/soldier_design.dart';
 import '../models/soldier_design_palette.dart';
 import '../models/soldier_faction_color_theme.dart';
+import 'hex_cell_preview_layout.dart';
+import 'hex_cell_styles_paint.dart';
 import 'multi_polygon_soldier_painter.dart';
 import 'soldier_design_catalog.dart';
 
@@ -24,6 +28,7 @@ class Pseudo3DScene extends StatefulWidget {
     this.maxViewportHeight = 540,
     this.viewportWidthFactor = 0.94,
     this.maxViewportWidth = 980,
+    this.cellVisualStyle = HexCellPreviewStyle.defaultStyle,
   });
 
   final Pseudo3DMeshMode meshMode;
@@ -32,6 +37,7 @@ class Pseudo3DScene extends StatefulWidget {
   final double maxViewportHeight;
   final double viewportWidthFactor;
   final double maxViewportWidth;
+  final HexCellPreviewStyle cellVisualStyle;
 
   @override
   State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
@@ -361,6 +367,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     if (_lastElapsed == null) {
       setState(() {
         _soldierMotionT = nextMotionT;
+        _effectT = elapsedSeconds;
       });
       _lastElapsed = elapsed;
       return;
@@ -640,6 +647,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         meshMode: widget.meshMode,
                         zoom: _zoom,
                         effectT: _effectT,
+                        cellVisualStyle: widget.cellVisualStyle,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -694,6 +702,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         meshMode: widget.meshMode,
                         zoom: _zoom,
                         effectT: _effectT,
+                        cellVisualStyle: widget.cellVisualStyle,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -926,6 +935,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     required this.meshMode,
     required this.zoom,
     required this.effectT,
+    required this.cellVisualStyle,
     required this.yellowSlimeFrames,
     required this.fireYellowFrames,
     required this.tornadoRedFrames,
@@ -945,6 +955,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   final Pseudo3DMeshMode meshMode;
   final double zoom;
   final double effectT;
+  final HexCellPreviewStyle cellVisualStyle;
   final List<ui.Image> yellowSlimeFrames;
   final List<ui.Image> fireYellowFrames;
   final List<ui.Image> tornadoRedFrames;
@@ -996,7 +1007,6 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     return Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
   }
 
-  static const double _fixedInnerTransparency = 0.9;
   static const double _fixedInnerScale = 0.847;
 
   static const double _baseRadius = 28;
@@ -1053,26 +1063,57 @@ class _Pseudo3DBoardPainter extends CustomPainter {
           _ => polygon.path,
         };
 
-        canvas.drawPath(
-          fillPath,
-          Paint()..color = polygon.fillColor,
-        );
-        if (meshMode == Pseudo3DMeshMode.outlineHalfTransparent) {
+        if (cellVisualStyle.usesVariantPaint &&
+            meshMode != Pseudo3DMeshMode.solid) {
+          final SoldierDesignPalette faction =
+              polygon.faction ?? SoldierDesignPalette.red;
+          final CellCorePalette palette = CellCorePalette.fromTerritoryField(
+            faction: faction,
+            strengthLevel: polygon.level,
+          );
+          HexCellStylesPaint.paintProjectedCell(
+            canvas,
+            style: cellVisualStyle,
+            palette: palette,
+            center: polygon.center,
+            outerVertices: polygon.outerVertices,
+            outerRadius: polygon.outerRadius,
+            strokeScale: polygon.strokeScale,
+            boardEffectTimeSec: effectT,
+            boardFaction: faction,
+          );
+          HexCellPreviewLayout.paintUnifiedHexOutline(
+            canvas,
+            polygon.path,
+            polygon.strokeScale,
+          );
+        } else {
+          final SoldierDesignPalette faction =
+              polygon.faction ?? SoldierDesignPalette.red;
+          final CellCorePalette pal = CellCorePalette.fromTerritoryField(
+            faction: faction,
+            strengthLevel: polygon.level,
+          );
+          Color fillColor = polygon.fillColor;
+          if (cellVisualStyle == HexCellPreviewStyle.l1) {
+            fillColor = pal.componentIndex1;
+          }
           canvas.drawPath(
-            innerPath,
-            Paint()
-              ..color = polygon.innerColor.withValues(
-                alpha: (1 - _fixedInnerTransparency).clamp(0.0, 1.0),
-              ),
+            fillPath,
+            Paint()..color = fillColor,
+          );
+          if (meshMode == Pseudo3DMeshMode.outlineHalfTransparent) {
+            canvas.drawPath(
+              innerPath,
+              Paint()..color = pal.innerHexHolePaint,
+            );
+          }
+          HexCellPreviewLayout.paintUnifiedHexOutline(
+            canvas,
+            polygon.path,
+            polygon.strokeScale,
           );
         }
-        canvas.drawPath(
-          polygon.path,
-          Paint()
-            ..color = Colors.black.withValues(alpha: 0.72)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = math.max(0.9, 2.0 * polygon.strokeScale),
-        );
       } else if (polygon.isWarCell && _shouldShowBoundaryWarVfx(polygon)) {
         _paintSlimeLose(canvas, polygon);
       }
@@ -1234,6 +1275,9 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     }
     path.close();
 
+    final double outerRadius =
+        (projectedVertices[0] - center.screen).distance;
+
     return _ProjectedHexPolygon(
       path: path,
       strokeScale: center.scale,
@@ -1241,6 +1285,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       fillColor: Colors.transparent,
       innerColor: Colors.transparent,
       center: center.screen,
+      outerRadius: outerRadius,
+      outerVertices: List<Offset>.unmodifiable(projectedVertices),
     );
   }
 
@@ -1647,6 +1693,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         oldDelegate.meshMode != meshMode ||
         oldDelegate.zoom != zoom ||
         oldDelegate.effectT != effectT ||
+        oldDelegate.cellVisualStyle != cellVisualStyle ||
         oldDelegate.yellowSlimeFrames != yellowSlimeFrames ||
         oldDelegate.fireYellowFrames != fireYellowFrames ||
         oldDelegate.tornadoRedFrames != tornadoRedFrames ||
@@ -1721,6 +1768,8 @@ class _ProjectedHexPolygon {
     required this.fillColor,
     required this.innerColor,
     required this.center,
+    required this.outerRadius,
+    required this.outerVertices,
     this.level = 1,
     this.localCenter,
     this.faction,
@@ -1733,6 +1782,10 @@ class _ProjectedHexPolygon {
   final Color fillColor;
   final Color innerColor;
   final Offset center;
+  /// Screen-space distance from [center] to a hex vertex (perspective-correct).
+  final double outerRadius;
+  /// Six screen-space outer hex vertices (same winding as [path]).
+  final List<Offset> outerVertices;
   final int level;
   final Offset? localCenter;
   final SoldierDesignPalette? faction;
@@ -1745,6 +1798,8 @@ class _ProjectedHexPolygon {
     Color? fillColor,
     Color? innerColor,
     Offset? center,
+    double? outerRadius,
+    List<Offset>? outerVertices,
     int? level,
     Offset? localCenter,
     SoldierDesignPalette? faction,
@@ -1757,6 +1812,8 @@ class _ProjectedHexPolygon {
       fillColor: fillColor ?? this.fillColor,
       innerColor: innerColor ?? this.innerColor,
       center: center ?? this.center,
+      outerRadius: outerRadius ?? this.outerRadius,
+      outerVertices: outerVertices ?? this.outerVertices,
       level: level ?? this.level,
       localCenter: localCenter ?? this.localCenter,
       faction: faction ?? this.faction,
