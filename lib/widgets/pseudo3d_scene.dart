@@ -28,7 +28,6 @@ class Pseudo3DScene extends StatefulWidget {
     this.maxViewportHeight = 540,
     this.viewportWidthFactor = 0.94,
     this.maxViewportWidth = 980,
-    this.cellVisualStyle = HexCellPreviewStyle.defaultStyle,
   });
 
   final Pseudo3DMeshMode meshMode;
@@ -37,7 +36,6 @@ class Pseudo3DScene extends StatefulWidget {
   final double maxViewportHeight;
   final double viewportWidthFactor;
   final double maxViewportWidth;
-  final HexCellPreviewStyle cellVisualStyle;
 
   @override
   State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
@@ -647,7 +645,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         meshMode: widget.meshMode,
                         zoom: _zoom,
                         effectT: _effectT,
-                        cellVisualStyle: widget.cellVisualStyle,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -702,7 +699,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         meshMode: widget.meshMode,
                         zoom: _zoom,
                         effectT: _effectT,
-                        cellVisualStyle: widget.cellVisualStyle,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -935,7 +931,6 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     required this.meshMode,
     required this.zoom,
     required this.effectT,
-    required this.cellVisualStyle,
     required this.yellowSlimeFrames,
     required this.fireYellowFrames,
     required this.tornadoRedFrames,
@@ -955,7 +950,6 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   final Pseudo3DMeshMode meshMode;
   final double zoom;
   final double effectT;
-  final HexCellPreviewStyle cellVisualStyle;
   final List<ui.Image> yellowSlimeFrames;
   final List<ui.Image> fireYellowFrames;
   final List<ui.Image> tornadoRedFrames;
@@ -1050,6 +1044,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
 
     for (final _ProjectedHexPolygon polygon in projected) {
       if (paintLayer == _BoardPaintLayer.hexMesh) {
+        final HexCellPreviewStyle cellStyle =
+            hexCellStyleForStrengthLevel(polygon.level);
         final Path innerPath = _buildScaledInnerPath(
           polygon.path,
           polygon.center,
@@ -1063,7 +1059,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
           _ => polygon.path,
         };
 
-        if (cellVisualStyle.usesVariantPaint &&
+        if (cellStyle.usesVariantPaint &&
             meshMode != Pseudo3DMeshMode.solid) {
           final SoldierDesignPalette faction =
               polygon.faction ?? SoldierDesignPalette.red;
@@ -1073,7 +1069,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
           );
           HexCellStylesPaint.paintProjectedCell(
             canvas,
-            style: cellVisualStyle,
+            style: cellStyle,
             palette: palette,
             center: polygon.center,
             outerVertices: polygon.outerVertices,
@@ -1095,7 +1091,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
             strengthLevel: polygon.level,
           );
           Color fillColor = polygon.fillColor;
-          if (cellVisualStyle == HexCellPreviewStyle.l1) {
+          if (cellStyle == HexCellPreviewStyle.l1) {
             fillColor = pal.componentIndex1;
           }
           canvas.drawPath(
@@ -1693,7 +1689,6 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         oldDelegate.meshMode != meshMode ||
         oldDelegate.zoom != zoom ||
         oldDelegate.effectT != effectT ||
-        oldDelegate.cellVisualStyle != cellVisualStyle ||
         oldDelegate.yellowSlimeFrames != yellowSlimeFrames ||
         oldDelegate.fireYellowFrames != fireYellowFrames ||
         oldDelegate.tornadoRedFrames != tornadoRedFrames ||

@@ -42,11 +42,8 @@ class _HexCellDemoPanelState extends State<HexCellDemoPanel> {
   void _syncA2SwapTimer() {
     _a2SwapTimer?.cancel();
     _a2SwapTimer = null;
-    if (widget.style == HexCellPreviewStyle.a2 ||
-        widget.style == HexCellPreviewStyle.l2) {
-      final double periodSec = widget.style == HexCellPreviewStyle.l2
-          ? HexCellStylesPaint.l2ThemeCyclePeriodSec
-          : HexCellStylesPaint.a2ThemeSwapPeriodSec;
+    if (widget.style == HexCellPreviewStyle.a2) {
+      final double periodSec = HexCellStylesPaint.a2ThemeSwapPeriodSec;
       _a2SwapTimer = Timer.periodic(
         Duration(milliseconds: (periodSec * 1000).round()),
         (_) {
@@ -133,7 +130,7 @@ class _HexCellDemoPanelState extends State<HexCellDemoPanel> {
                   );
                 },
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
                 'Cell preview (temp)',
                 textAlign: TextAlign.center,
@@ -163,7 +160,7 @@ class _HexCellDemoPanelState extends State<HexCellDemoPanel> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Expanded(
                 child: Center(
                   child: AspectRatio(

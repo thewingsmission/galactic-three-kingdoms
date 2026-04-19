@@ -34,20 +34,88 @@ class A1HexCellPaint {
       ..color = color;
   }
 
-  /// One filled triangle + optional hairline stroke (single pass each).
-  static void _cornerTriangle(
+  /// Map / perspective: triangle size tracks **screen-space** outer radius only (preview: `scale ≈ r/56`).
+  /// Vertices are already perspective-correct in pixels; do not multiply by [strokeScale] or use a
+  /// high floor — that kept distant triangles disproportionately large.
+  static double cornerTriangleUnitForMap(double outerRadius) =>
+      (outerRadius / 56.0).clamp(0.04, 12.0);
+
+  /// Six triangles at the vertices of the inner hex ([innerHexVertices]).
+  ///
+  /// Inward direction at each vertex is the **interior angle bisector** of the inner hex (from the
+  /// two meeting edges). This matches the preview (regular hex) and stays correct on the
+  /// perspective map — using `projectedCenter - vertex` is wrong when the tile center is not the
+  /// visual centroid in screen space.
+  static void paintInnerCornerTriangles(
     Canvas canvas,
-    Offset c,
-    Offset p,
+    List<Offset> innerHexVertices,
     double unit,
     Color fillColor,
   ) {
-    final Offset inward = c - p;
-    final double id = inward.distance;
-    if (id < 1e-6) {
+    assert(innerHexVertices.length == 6);
+    final Offset centroid = _hexCentroid(innerHexVertices);
+    for (int i = 0; i < 6; i++) {
+      final Offset? n = _innerHexInwardUnit(innerHexVertices, i, centroid);
+      if (n == null) {
+        continue;
+      }
+      _cornerTriangleWithInward(canvas, innerHexVertices[i], n, unit, fillColor);
+    }
+  }
+
+  static Offset _hexCentroid(List<Offset> v) {
+    double sx = 0, sy = 0;
+    for (final Offset p in v) {
+      sx += p.dx;
+      sy += p.dy;
+    }
+    return Offset(sx / v.length, sy / v.length);
+  }
+
+  /// Unit vector from inner vertex [i] toward hex interior (bisector of edges to i−1 and i+1).
+  static Offset? _innerHexInwardUnit(
+    List<Offset> v,
+    int i,
+    Offset centroid,
+  ) {
+    final Offset p = v[i];
+    final Offset pIm = v[(i + 5) % 6];
+    final Offset pIp = v[(i + 1) % 6];
+    final Offset u1 = pIm - p;
+    final Offset u2 = pIp - p;
+    final double d1 = u1.distance;
+    final double d2 = u2.distance;
+    if (d1 < 1e-10 || d2 < 1e-10) {
+      return null;
+    }
+    final Offset e1 = u1 / d1;
+    final Offset e2 = u2 / d2;
+    Offset bis = Offset(e1.dx + e2.dx, e1.dy + e2.dy);
+    final double bl = bis.distance;
+    if (bl < 1e-10) {
+      return null;
+    }
+    bis = bis / bl;
+    final Offset towardC = centroid - p;
+    if (towardC.distance > 1e-10 &&
+        bis.dx * towardC.dx + bis.dy * towardC.dy < 0) {
+      bis = Offset(-bis.dx, -bis.dy);
+    }
+    return bis;
+  }
+
+  /// One filled triangle; [inwardUnit] points from [p] toward the cell interior.
+  static void _cornerTriangleWithInward(
+    Canvas canvas,
+    Offset p,
+    Offset inwardUnit,
+    double unit,
+    Color fillColor,
+  ) {
+    if (inwardUnit.distance < 1e-6) {
       return;
     }
-    final Offset n = inward / id;
+    final Offset n = inwardUnit;
     final Offset perp = Offset(-n.dy, n.dx);
     final double tipIn = 11.0 * unit;
     final double halfBase = 5.2 * unit;
@@ -105,11 +173,8 @@ class A1HexCellPaint {
       );
     }
 
-    final double unit =
-        (outerRadius / 56.0 * math.max(0.75, strokeScale)).clamp(0.45, 2.2);
-    for (final Offset p in iv) {
-      _cornerTriangle(canvas, center, p, unit, palette.highlight);
-    }
+    final double unit = cornerTriangleUnitForMap(outerRadius);
+    paintInnerCornerTriangles(canvas, iv, unit, palette.highlight);
 
     canvas.restore();
   }
@@ -172,9 +237,7 @@ class A1HexCellPaint {
       );
     }
 
-    for (final Offset p in holeVerts) {
-      _cornerTriangle(canvas, c, p, scale, palette.highlight);
-    }
+    paintInnerCornerTriangles(canvas, holeVerts, scale, palette.highlight);
 
     canvas.restore();
   }

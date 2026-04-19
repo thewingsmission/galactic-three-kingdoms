@@ -9,7 +9,7 @@ import '../models/soldier_design_palette.dart';
 import 'a1_hex_cell_paint.dart';
 import 'hex_cell_preview_layout.dart';
 
-/// Preview + map paints for default, **L1**, **L2**, **A1**, **A2** (L1 default mesh on map).
+/// Preview + map paints for default, **L1**, **L2**–**L4**, **A1**, **A2** (L1 default mesh on map).
 class HexCellStylesPaint {
   HexCellStylesPaint._();
 
@@ -33,19 +33,25 @@ class HexCellStylesPaint {
   /// A2: swap fill pattern `[#1,#3,#1]` ↔ `[#3,#1,#3]` on this cadence (seconds).
   static const double a2ThemeSwapPeriodSec = 0.45;
 
-  /// L2: one full inner-accent ↔ **L1** cycle (seconds); A2 uses [a2ThemeSwapPeriodSec].
-  static const double l2ThemeCyclePeriodSec = 1.4;
-
   static bool _a2SwapThemeAt(double effectTimeSec) =>
       (effectTimeSec / a2ThemeSwapPeriodSec).floor() % 2 == 1;
 
-  static bool _l2ShowInnerRingAt(double effectTimeSec) =>
-      (effectTimeSec / l2ThemeCyclePeriodSec).floor() % 2 == 0;
+  /// **L2**–**L4** inner-band / parallelogram accent: fixed per faction.
+  static const Color _l2AccentRed = Color(0xFF84185B);
+  static const Color _l2AccentYellow = Color(0xFFAC4D00);
+  static const Color _l2AccentBlue = Color(0xFF2D2995);
 
-  /// **L2** inner-band / parallelogram accent: fixed per faction.
-  static const Color _l2AccentRed = Color(0xFFC52588);
-  static const Color _l2AccentYellow = Color(0xFFE06B29);
-  static const Color _l2AccentBlue = Color(0xFF0059BA);
+  /// **L4** inner-hole corner triangles: fixed per faction (not palette highlight).
+  static const Color _l4TriangleRed = Color(0xFFFFAAC6);
+  static const Color _l4TriangleYellow = Color(0xFFFFFF84);
+  static const Color _l4TriangleBlue = Color(0xFFB299FF);
+
+  /// Radial thickness (Δt) of the **second** L2 ring (accent band), in normalized scale from center
+  /// to vertex: inner boundary at t=[_innerT], outer at t=[_innerT]−this.
+  static const double _l2SecondRingDeltaT = 0.124968;
+
+  /// Public alias for L2–L4 second-ring thickness (same as [_l2SecondRingDeltaT]).
+  static const double l2SecondRingDeltaT = _l2SecondRingDeltaT;
 
   static Color l2AccentForCoreTheme(CoreColorTheme t) => switch (t) {
         CoreColorTheme.red => _l2AccentRed,
@@ -59,15 +65,27 @@ class HexCellStylesPaint {
         SoldierDesignPalette.blue => _l2AccentBlue,
       };
 
+  static Color l4TriangleForCoreTheme(CoreColorTheme t) => switch (t) {
+        CoreColorTheme.red => _l4TriangleRed,
+        CoreColorTheme.yellow => _l4TriangleYellow,
+        CoreColorTheme.blue => _l4TriangleBlue,
+      };
+
+  static Color l4TriangleForSoldierPalette(SoldierDesignPalette p) => switch (p) {
+        SoldierDesignPalette.red => _l4TriangleRed,
+        SoldierDesignPalette.yellow => _l4TriangleYellow,
+        SoldierDesignPalette.blue => _l4TriangleBlue,
+      };
+
   static const int _l2RingCount = 2;
 
-  /// Outer band matches **L1** thick ring (1.0 → [_innerT]); inner band uses one A2 step [_a2RingDeltaT].
-  static double _l2TAtBoundary(int b) {
+  /// Outer band matches **L1** thick ring (1.0 → [_innerT]); inner band width is [secondRingDeltaT].
+  static double _l2TAtBoundary(int b, double secondRingDeltaT) {
     assert(b >= 0 && b <= _l2RingCount);
     return switch (b) {
       0 => 1.0,
       1 => _innerT,
-      2 => _innerT - _a2RingDeltaT,
+      2 => _innerT - secondRingDeltaT,
       _ => throw StateError('l2 boundary'),
     };
   }
@@ -127,9 +145,10 @@ class HexCellStylesPaint {
     Offset center,
     List<Offset> outerVertices,
     Color fillColor,
+    double secondRingDeltaT,
   ) {
     final List<Offset> v1 = _scaledVerts(center, outerVertices, 1.0);
-    final double t2 = _l2TAtBoundary(_l2RingCount);
+    final double t2 = _l2TAtBoundary(_l2RingCount, secondRingDeltaT);
     final List<Offset> v2 = _scaledVerts(center, outerVertices, t2);
     final Paint paint = Paint()..color = fillColor;
 
@@ -160,31 +179,31 @@ class HexCellStylesPaint {
     canvas.drawPath(inner, Paint()..color = palette.innerHexHolePaint);
   }
 
-  /// L2: outer **#1** fixed; inner band [l2AccentColor] when [showL2InnerRing], else **L1**.
+  /// L2–L4: outer **#1** fixed; inner band [l2AccentColor].
+  /// [paintCornerParallelograms]: **L3**/**L4**; off for **L2**.
+  /// [innerCornerTriangleUnit]: **L4** only — **A1**-style triangles on inner-hole vertices.
+  /// [l4TriangleFill]: **L4** triangle fill when [innerCornerTriangleUnit] is set; default [palette.highlight].
   static void _paintL2HexRings(
     Canvas canvas,
     Offset center,
     List<Offset> outerVertices,
     CellCorePalette palette, {
     required Color l2AccentColor,
-    bool showL2InnerRing = true,
+    double l2SecondRingDeltaT = _l2SecondRingDeltaT,
+    bool paintCornerParallelograms = true,
+    double? innerCornerTriangleUnit,
+    Color? l4TriangleFill,
   }) {
     final Path clip = _path(outerVertices);
     canvas.save();
     canvas.clipPath(clip);
 
-    if (!showL2InnerRing) {
-      _paintL1FromOuterVerts(canvas, center, outerVertices, palette);
-      canvas.restore();
-      return;
-    }
-
     final Color c1 = palette.componentIndex1;
     final List<Color> ringFills = <Color>[c1, l2AccentColor];
 
     for (int i = 0; i < _l2RingCount; i++) {
-      final double tHi = _l2TAtBoundary(i);
-      final double tLo = _l2TAtBoundary(i + 1);
+      final double tHi = _l2TAtBoundary(i, l2SecondRingDeltaT);
+      final double tLo = _l2TAtBoundary(i + 1, l2SecondRingDeltaT);
       final Path outer = _path(_scaledVerts(center, outerVertices, tHi));
       final Path inner = _path(_scaledVerts(center, outerVertices, tLo));
       final Path band = Path.combine(PathOperation.difference, outer, inner);
@@ -193,19 +212,40 @@ class HexCellStylesPaint {
 
     canvas.drawPath(
       _path(
-        _scaledVerts(center, outerVertices, _l2TAtBoundary(_l2RingCount)),
+        _scaledVerts(
+          center,
+          outerVertices,
+          _l2TAtBoundary(_l2RingCount, l2SecondRingDeltaT),
+        ),
       ),
       Paint()..color = palette.innerHexHolePaintFrom(l2AccentColor),
     );
 
-    _paintL2CornerParallelograms(
-      canvas,
-      center,
-      outerVertices,
-      l2AccentColor,
-    );
+    if (paintCornerParallelograms) {
+      _paintL2CornerParallelograms(
+        canvas,
+        center,
+        outerVertices,
+        l2AccentColor,
+        l2SecondRingDeltaT,
+      );
+    }
 
-    // L2: no black strokes on ring boundaries (inner band has no outline).
+    if (innerCornerTriangleUnit != null) {
+      final List<Offset> innerHoleVerts = _scaledVerts(
+        center,
+        outerVertices,
+        _l2TAtBoundary(_l2RingCount, l2SecondRingDeltaT),
+      );
+      A1HexCellPaint.paintInnerCornerTriangles(
+        canvas,
+        innerHoleVerts,
+        innerCornerTriangleUnit,
+        l4TriangleFill ?? palette.highlight,
+      );
+    }
+
+    // L2–L4: no black strokes on ring boundaries (inner band has no outline).
     canvas.restore();
   }
 
@@ -310,7 +350,31 @@ class HexCellStylesPaint {
           HexCellPreviewLayout.pointyTopVerts(lc, lr),
           pal,
           l2AccentColor: l2AccentForCoreTheme(coreTheme),
-          showL2InnerRing: !a2SwapThemeRings,
+          paintCornerParallelograms: false,
+        );
+        return;
+      case HexCellPreviewStyle.l3:
+        final Offset l3c = HexCellPreviewLayout.center(size);
+        final double l3r = HexCellPreviewLayout.outerRadius(size);
+        _paintL2HexRings(
+          canvas,
+          l3c,
+          HexCellPreviewLayout.pointyTopVerts(l3c, l3r),
+          pal,
+          l2AccentColor: l2AccentForCoreTheme(coreTheme),
+        );
+        return;
+      case HexCellPreviewStyle.l4:
+        final Offset l4c = HexCellPreviewLayout.center(size);
+        final double l4r = HexCellPreviewLayout.outerRadius(size);
+        _paintL2HexRings(
+          canvas,
+          l4c,
+          HexCellPreviewLayout.pointyTopVerts(l4c, l4r),
+          pal,
+          l2AccentColor: l2AccentForCoreTheme(coreTheme),
+          innerCornerTriangleUnit: HexCellPreviewLayout.scale(size),
+          l4TriangleFill: l4TriangleForCoreTheme(coreTheme),
         );
         return;
       case HexCellPreviewStyle.a1:
@@ -356,7 +420,27 @@ class HexCellStylesPaint {
           outerVertices,
           palette,
           l2AccentColor: l2AccentForSoldierPalette(boardFaction),
-          showL2InnerRing: _l2ShowInnerRingAt(boardEffectTimeSec),
+          paintCornerParallelograms: false,
+        );
+        return;
+      case HexCellPreviewStyle.l3:
+        _paintL2HexRings(
+          canvas,
+          center,
+          outerVertices,
+          palette,
+          l2AccentColor: l2AccentForSoldierPalette(boardFaction),
+        );
+        return;
+      case HexCellPreviewStyle.l4:
+        _paintL2HexRings(
+          canvas,
+          center,
+          outerVertices,
+          palette,
+          l2AccentColor: l2AccentForSoldierPalette(boardFaction),
+          innerCornerTriangleUnit: A1HexCellPaint.cornerTriangleUnitForMap(outerRadius),
+          l4TriangleFill: l4TriangleForSoldierPalette(boardFaction),
         );
         return;
       case HexCellPreviewStyle.a1:

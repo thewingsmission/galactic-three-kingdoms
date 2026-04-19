@@ -28,6 +28,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  /// Side panel preview only; the map always paints **L1…L4** by territory strength level.
   HexCellPreviewStyle _cellVisualStyle = HexCellPreviewStyle.defaultStyle;
 
   static const _HexGlowConfig _hexGlowConfig = _HexGlowConfig(
@@ -58,7 +59,6 @@ class _MainScreenState extends State<MainScreen> {
                       meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
                       boardBottomInset: 0,
                       viewportHeightFactor: 0.92,
-                      cellVisualStyle: _cellVisualStyle,
                     ),
                   ),
                 ),
