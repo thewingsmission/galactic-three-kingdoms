@@ -645,6 +645,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         meshMode: widget.meshMode,
                         zoom: _zoom,
                         effectT: _effectT,
+                        shadowAnchorWorldY: _shadowAnchorWorldY,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -699,6 +700,41 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         meshMode: widget.meshMode,
                         zoom: _zoom,
                         effectT: _effectT,
+                        shadowAnchorWorldY: _shadowAnchorWorldY,
+                        yellowSlimeFrames: _yellowSlimeFrames,
+                        fireYellowFrames: _fireYellowFrames,
+                        tornadoRedFrames: _tornadoRedFrames,
+                        tornadoIceFrames: _tornadoIceFrames,
+                        redSlimeFrames: _redSlimeFrames,
+                        blueSlimeFrames: _blueSlimeFrames,
+                        tigerLoseImage: _tigerLoseImage,
+                        tigerWinImage: _tigerWinImage,
+                        eagleLoseImage: _eagleLoseImage,
+                        eagleWinImage: _eagleWinImage,
+                        dragonLoseImage: _dragonLoseImage,
+                        dragonWinImage: _dragonWinImage,
+                        paintLayer: _BoardPaintLayer.shadowHighlight,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: widget.boardBottomInset,
+                child: Center(
+                  child: SizedBox(
+                    width: viewportWidth,
+                    height: viewportHeight,
+                    child: CustomPaint(
+                      painter: _Pseudo3DBoardPainter(
+                        boardOffset: clampedOffset,
+                        meshMode: widget.meshMode,
+                        zoom: _zoom,
+                        effectT: _effectT,
+                        shadowAnchorWorldY: _shadowAnchorWorldY,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -918,10 +954,11 @@ class _RoleBottomMetrics {
   final Offset point;
 }
 
-/// Hex fills/outline vs war VFX must composite in separate layers so the shadow
-/// widget can sit between mesh and slime overlays.
+/// Hex fills vs shadow rim vs war VFX composite in separate layers: mesh first,
+/// then shadow footprint (above all cells), then slime/tornado/mascot overlays.
 enum _BoardPaintLayer {
   hexMesh,
+  shadowHighlight,
   warEffects,
 }
 
@@ -931,6 +968,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     required this.meshMode,
     required this.zoom,
     required this.effectT,
+    required this.shadowAnchorWorldY,
     required this.yellowSlimeFrames,
     required this.fireYellowFrames,
     required this.tornadoRedFrames,
@@ -950,6 +988,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   final Pseudo3DMeshMode meshMode;
   final double zoom;
   final double effectT;
+  /// World Y solved so the soldier shadow sits on the map; used to find the stepped-on hex.
+  final double shadowAnchorWorldY;
   final List<ui.Image> yellowSlimeFrames;
   final List<ui.Image> fireYellowFrames;
   final List<ui.Image> tornadoRedFrames;
@@ -1014,10 +1054,190 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   static final double landExtentY =
       math.sqrt(3) * _baseRadius * (_landSideHexes - 0.5);
 
+  /// Rounds fractional axial coords (same grid as [_baseLandTileCenters]) to a hex cell.
+  static _HexAxial _axialRoundFractional(double fq, double fr) {
+    final double x = fq;
+    final double z = fr;
+    final double y = -fq - fr;
+    int rx = x.round();
+    int ry = y.round();
+    int rz = z.round();
+    final double xDiff = (rx - x).abs();
+    final double yDiff = (ry - y).abs();
+    final double zDiff = (rz - z).abs();
+    if (xDiff > yDiff && xDiff > zDiff) {
+      rx = -ry - rz;
+    } else if (yDiff > zDiff) {
+      ry = -rx - rz;
+    } else {
+      rz = -rx - ry;
+    }
+    return _HexAxial(rx, rz);
+  }
+
+  /// Land local center of the hex under the soldier shadow (viewport anchor), if on the map.
+  static Offset? _localCenterUnderShadow(
+    Offset boardOffset,
+    double shadowAnchorWorldY,
+  ) {
+    final Offset anchorLocal =
+        Offset(-boardOffset.dx, shadowAnchorWorldY - boardOffset.dy);
+    final double fq = anchorLocal.dx / (_baseRadius * 1.5);
+    final double fr =
+        anchorLocal.dy / (_baseRadius * math.sqrt(3)) - fq / 2;
+    final _HexAxial axial = _axialRoundFractional(fq, fr);
+    return _baseLandCentersByAxial[axial];
+  }
+
+  /// Electric buzz on the hex outline + rim glow (shadow footprint). Uses [effectT] for motion.
+  void _paintShadowFootprintGlow(
+    Canvas canvas,
+    Path outlinePath,
+    double strokeScale,
+    SoldierDesignPalette faction,
+  ) {
+    final c = faction.shadowFootprintElectricColors;
+    final double s = math.max(0.85, strokeScale);
+    final double buzzT = effectT;
+
+    for (final ui.PathMetric metric in outlinePath.computeMetrics()) {
+      final double len = metric.length;
+      if (len < 1e-6) {
+        continue;
+      }
+      final int steps = (len / 3.8).clamp(40, 100).round();
+      Offset? prev;
+      for (int i = 0; i <= steps; i++) {
+        final double dist = len * i / steps;
+        final ui.Tangent? tan = metric.getTangentForOffset(dist);
+        if (tan == null) {
+          continue;
+        }
+        final Offset p = tan.position;
+        final Offset tv = tan.vector;
+        final double td = tv.distance;
+        if (td < 1e-8) {
+          continue;
+        }
+        final Offset tang = Offset(tv.dx / td, tv.dy / td);
+        final Offset norm = Offset(-tang.dy, tang.dx);
+
+        final double phase = buzzT * 36 + dist * 0.18;
+        final double buzz =
+            math.sin(phase) * math.cos(phase * 2.1 + dist * 0.03);
+        final double crackle =
+            math.sin(buzzT * 52 + dist * 0.22) * math.cos(buzzT * 23 + i * 0.4);
+        final double amp =
+            (3.4 + 5.8 * (0.5 + 0.5 * math.sin(buzzT * 41 + i * 0.73))) * s;
+
+        final Offset sparkEnd = p + norm * (buzz * amp);
+        final Paint spark = Paint()
+          ..strokeWidth = math.max(0.85, 1.55 * s)
+          ..color = c.spark.withValues(alpha: 0.58 + 0.38 * buzz.abs())
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(p, sparkEnd, spark);
+
+        final Paint sparkCore = Paint()
+          ..strokeWidth = math.max(0.45, 0.72 * s)
+          ..color = c.sparkCore.withValues(alpha: 0.72 + 0.26 * crackle.abs())
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(
+          p,
+          p + norm * (buzz * amp * 0.55),
+          sparkCore,
+        );
+
+        if (prev != null && i > 0) {
+          final double midBuzz = math.sin(buzzT * 31 + dist * 0.14);
+          final Offset mid = Offset(
+            (prev.dx + p.dx) * 0.5 + norm.dx * midBuzz * 2.4 * s,
+            (prev.dy + p.dy) * 0.5 + norm.dy * midBuzz * 2.4 * s,
+          );
+          final Paint zig = Paint()
+            ..strokeWidth = math.max(0.55, 1.05 * s)
+            ..color = c.zig.withValues(alpha: 0.42 + 0.38 * midBuzz.abs())
+            ..strokeCap = StrokeCap.round
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, 1.15 * s);
+          canvas.drawLine(prev, mid, zig);
+          canvas.drawLine(mid, p, zig);
+        }
+        prev = p;
+      }
+    }
+
+    final Paint halo = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(10.0, 26.0 * s)
+      ..color = c.halo.withValues(alpha: 0.58)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 13.0 * s);
+    canvas.drawPath(outlinePath, halo);
+
+    final Paint glow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(6.0, 15.0 * s)
+      ..color = c.glow.withValues(alpha: 0.88)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 7.0 * s);
+    canvas.drawPath(outlinePath, glow);
+
+    final Paint rim = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.8, 4.0 * s)
+      ..color = c.rim.withValues(alpha: 1.0)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 1.6 * s);
+    canvas.drawPath(outlinePath, rim);
+  }
+
+  /// Bright chrome stroke on top of [HexCellPreviewLayout.paintUnifiedHexOutline] — same path, wider
+  /// than the black rim so the edge reads shiny and masks the dark line.
+  void _paintShadowChromeOutline(
+    Canvas canvas,
+    Path outlinePath,
+    double strokeScale,
+    SoldierDesignPalette faction,
+  ) {
+    final c = faction.shadowFootprintElectricColors;
+    final double s = math.max(0.85, strokeScale);
+    final double w = HexCellPreviewLayout.unifiedOutlineStrokeWidth(strokeScale);
+
+    final Paint outerBloom = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 2.4
+      ..color = c.chromeBloom.withValues(alpha: 0.5)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.0 * s);
+    canvas.drawPath(outlinePath, outerBloom);
+
+    final Paint midSheen = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 1.42
+      ..color = c.chromeMid.withValues(alpha: 0.92)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 1.1 * s);
+    canvas.drawPath(outlinePath, midSheen);
+
+    final Paint hotCore = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 1.12
+      ..color = c.chromeHot.withValues(alpha: 0.98);
+    canvas.drawPath(outlinePath, hotCore);
+
+    final double shimmer = 0.5 + 0.5 * math.sin(effectT * 6.2);
+    final Paint specular = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(0.6, w * 0.55)
+      ..color = Color.lerp(
+            const Color(0xFFFFFFFF),
+            c.chromeSpecularTint,
+            0.35 + 0.25 * shimmer,
+          )!
+          .withValues(alpha: 0.85 + 0.12 * shimmer);
+    canvas.drawPath(outlinePath, specular);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final Offset worldOrigin = Offset(boardOffset.dx, boardOffset.dy);
     final List<_ProjectedHexPolygon> projected = <_ProjectedHexPolygon>[];
+    final Offset? shadowHighlightLocal =
+        _localCenterUnderShadow(boardOffset, shadowAnchorWorldY);
 
     for (final Offset localCenter in _baseLandTileCenters) {
       final Offset worldCenter = localCenter + worldOrigin;
@@ -1043,6 +1263,10 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     );
 
     for (final _ProjectedHexPolygon polygon in projected) {
+      final bool isShadowStepCell = shadowHighlightLocal != null &&
+          polygon.localCenter != null &&
+          (polygon.localCenter! - shadowHighlightLocal).distanceSquared < 1.0;
+
       if (paintLayer == _BoardPaintLayer.hexMesh) {
         final HexCellPreviewStyle cellStyle =
             hexCellStyleForStrengthLevel(polygon.level);
@@ -1078,11 +1302,13 @@ class _Pseudo3DBoardPainter extends CustomPainter {
             boardEffectTimeSec: effectT,
             boardFaction: faction,
           );
-          HexCellPreviewLayout.paintUnifiedHexOutline(
-            canvas,
-            polygon.path,
-            polygon.strokeScale,
-          );
+          if (!isShadowStepCell) {
+            HexCellPreviewLayout.paintUnifiedHexOutline(
+              canvas,
+              polygon.path,
+              polygon.strokeScale,
+            );
+          }
         } else {
           final SoldierDesignPalette faction =
               polygon.faction ?? SoldierDesignPalette.red;
@@ -1104,13 +1330,39 @@ class _Pseudo3DBoardPainter extends CustomPainter {
               Paint()..color = pal.innerHexHolePaint,
             );
           }
+          if (!isShadowStepCell) {
+            HexCellPreviewLayout.paintUnifiedHexOutline(
+              canvas,
+              polygon.path,
+              polygon.strokeScale,
+            );
+          }
+        }
+      } else if (paintLayer == _BoardPaintLayer.shadowHighlight) {
+        if (isShadowStepCell) {
+          final SoldierDesignPalette glowFaction =
+              polygon.faction ?? SoldierDesignPalette.red;
+          _paintShadowFootprintGlow(
+            canvas,
+            polygon.path,
+            polygon.strokeScale,
+            glowFaction,
+          );
           HexCellPreviewLayout.paintUnifiedHexOutline(
             canvas,
             polygon.path,
             polygon.strokeScale,
           );
+          _paintShadowChromeOutline(
+            canvas,
+            polygon.path,
+            polygon.strokeScale,
+            glowFaction,
+          );
         }
-      } else if (polygon.isWarCell && _shouldShowBoundaryWarVfx(polygon)) {
+      } else if (paintLayer == _BoardPaintLayer.warEffects &&
+          polygon.isWarCell &&
+          _shouldShowBoundaryWarVfx(polygon)) {
         _paintSlimeLose(canvas, polygon);
       }
     }
@@ -1700,6 +1952,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         oldDelegate.meshMode != meshMode ||
         oldDelegate.zoom != zoom ||
         oldDelegate.effectT != effectT ||
+        oldDelegate.shadowAnchorWorldY != shadowAnchorWorldY ||
         oldDelegate.yellowSlimeFrames != yellowSlimeFrames ||
         oldDelegate.fireYellowFrames != fireYellowFrames ||
         oldDelegate.tornadoRedFrames != tornadoRedFrames ||
