@@ -68,6 +68,7 @@ flutter:
 
   assets:
     - image/
+    - image/spritesheet/
     - image/button_attack.png
     - image/button_defense.png
     - image/button_target.png

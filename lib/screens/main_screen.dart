@@ -34,6 +34,8 @@ class _MainScreenState extends State<MainScreen> {
     outerBlur: 2,
     innerBlur: 0,
   );
+  _TempBottomRibbonDesign _bottomRibbonDesign =
+      _TempBottomRibbonDesign.defaultMode;
 
   @override
   Widget build(BuildContext context) {
@@ -41,9 +43,7 @@ class _MainScreenState extends State<MainScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          const _GalacticBackground(
-            designIndex: 0,
-          ),
+          const _GalacticBackground(designIndex: 0),
           Positioned.fill(
             child: SafeArea(
               child: Pseudo3DScene(
@@ -54,17 +54,130 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
           Positioned(
+            top: 0,
+            left: 12,
+            bottom: 0,
+            child: SafeArea(
+              child: Center(
+                child: _TempBottomRibbonPanel(
+                  selectedDesign: _bottomRibbonDesign,
+                  onChanged: (_TempBottomRibbonDesign value) {
+                    setState(() {
+                      _bottomRibbonDesign = value;
+                    });
+                  },
+                ),
+              ),
+            ),
+          ),
+          Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: _BottomRibbon(
-              designIndex: 0,
+              designIndex:
+                  _bottomRibbonDesign == _TempBottomRibbonDesign.defaultMode
+                  ? 0
+                  : 10,
               onOpenDesigns: widget.onOpenDesigns,
               onOpenInventory: widget.onOpenInventory,
               onOpenWar: widget.onOpenWar,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+enum _TempBottomRibbonDesign { defaultMode, color }
+
+class _TempBottomRibbonPanel extends StatelessWidget {
+  const _TempBottomRibbonPanel({
+    required this.selectedDesign,
+    required this.onChanged,
+  });
+
+  final _TempBottomRibbonDesign selectedDesign;
+  final ValueChanged<_TempBottomRibbonDesign> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xCC0A1220),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _TempBottomRibbonButton(
+              label: 'Default',
+              isSelected: selectedDesign == _TempBottomRibbonDesign.defaultMode,
+              onTap: () => onChanged(_TempBottomRibbonDesign.defaultMode),
+            ),
+            const SizedBox(width: 6),
+            _TempBottomRibbonButton(
+              label: 'Color',
+              isSelected: selectedDesign == _TempBottomRibbonDesign.color,
+              onTap: () => onChanged(_TempBottomRibbonDesign.color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TempBottomRibbonButton extends StatelessWidget {
+  const _TempBottomRibbonButton({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: isSelected
+                ? const Color(0xFF3A74FF).withValues(alpha: 0.26)
+                : Colors.white.withValues(alpha: 0.04),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFF9BC0FF)
+                  : Colors.white.withValues(alpha: 0.14),
+            ),
+          ),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -88,7 +201,8 @@ class _GalacticBackgroundState extends State<_GalacticBackground>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: _scrollPeriod)..repeat();
+    _controller = AnimationController(vsync: this, duration: _scrollPeriod)
+      ..repeat();
   }
 
   @override
@@ -104,7 +218,8 @@ class _GalacticBackgroundState extends State<_GalacticBackground>
       builder: (BuildContext context, Widget? child) {
         return LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
-            final _GalaxyBackgroundSpec spec = _galaxyBackgroundSpecs[widget.designIndex];
+            final _GalaxyBackgroundSpec spec =
+                _galaxyBackgroundSpecs[widget.designIndex];
             final double tileWidth = math.max(720, constraints.maxWidth * 1.25);
             final double shift = _controller.value * tileWidth;
             return ColoredBox(
@@ -159,7 +274,10 @@ class _GalaxyTilePainter extends CustomPainter {
 
     final math.Random random = math.Random(spec.seed);
     for (int i = 0; i < spec.starCount; i++) {
-      final Offset star = Offset(random.nextDouble() * size.width, random.nextDouble() * size.height);
+      final Offset star = Offset(
+        random.nextDouble() * size.width,
+        random.nextDouble() * size.height,
+      );
       final double radius = i % 9 == 0 ? 2.0 : (i % 3 == 0 ? 1.2 : 0.8);
       final Color color = switch (i % 5) {
         0 => spec.starBright,
@@ -169,18 +287,34 @@ class _GalaxyTilePainter extends CustomPainter {
       };
       canvas.drawCircle(star, radius, Paint()..color = color);
     }
-
   }
 
   void _paintGalaxy(Canvas canvas, Size size, _GalaxyStamp galaxy) {
-    final Offset center = Offset(galaxy.center.dx * size.width, galaxy.center.dy * size.height);
+    final Offset center = Offset(
+      galaxy.center.dx * size.width,
+      galaxy.center.dy * size.height,
+    );
     final double radius = size.width * galaxy.radiusFactor;
     _paintHalo(canvas, center, radius, galaxy);
     switch (galaxy.shape) {
       case _GalaxyShape.spiral:
-        _paintSpiralGalaxy(canvas, center, radius, galaxy, armCount: 2, barStrength: 0);
+        _paintSpiralGalaxy(
+          canvas,
+          center,
+          radius,
+          galaxy,
+          armCount: 2,
+          barStrength: 0,
+        );
       case _GalaxyShape.barredSpiral:
-        _paintSpiralGalaxy(canvas, center, radius, galaxy, armCount: 2, barStrength: 1);
+        _paintSpiralGalaxy(
+          canvas,
+          center,
+          radius,
+          galaxy,
+          armCount: 2,
+          barStrength: 1,
+        );
       case _GalaxyShape.elliptical:
         _paintEllipticalGalaxy(canvas, center, radius, galaxy);
       case _GalaxyShape.ring:
@@ -201,8 +335,16 @@ class _GalaxyTilePainter extends CustomPainter {
     _paintCore(canvas, center, radius, galaxy);
   }
 
-  void _paintHalo(Canvas canvas, Offset center, double radius, _GalaxyStamp galaxy) {
-    final Rect haloRect = Rect.fromCircle(center: center, radius: radius * 1.35);
+  void _paintHalo(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    _GalaxyStamp galaxy,
+  ) {
+    final Rect haloRect = Rect.fromCircle(
+      center: center,
+      radius: radius * 1.35,
+    );
     canvas.drawCircle(
       center,
       radius * 1.25,
@@ -218,8 +360,16 @@ class _GalaxyTilePainter extends CustomPainter {
     );
   }
 
-  void _paintCore(Canvas canvas, Offset center, double radius, _GalaxyStamp galaxy) {
-    final Rect coreRect = Rect.fromCircle(center: center, radius: radius * 0.42);
+  void _paintCore(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    _GalaxyStamp galaxy,
+  ) {
+    final Rect coreRect = Rect.fromCircle(
+      center: center,
+      radius: radius * 0.42,
+    );
     canvas.drawCircle(
       center,
       radius * 0.42,
@@ -268,14 +418,17 @@ class _GalaxyTilePainter extends CustomPainter {
     }
 
     for (int arm = 0; arm < armCount; arm++) {
-      final double baseArmAngle = galaxy.rotation + arm * (math.pi * 2 / armCount);
+      final double baseArmAngle =
+          galaxy.rotation + arm * (math.pi * 2 / armCount);
       for (int i = 0; i < 140; i++) {
         final double t = i / 139;
         final double angle = baseArmAngle + t * galaxy.swirl;
         final double distance = radius * (0.08 + t * 0.96);
-        final Offset p = center + Offset(math.cos(angle), math.sin(angle) * 0.58) * distance;
+        final Offset p =
+            center + Offset(math.cos(angle), math.sin(angle) * 0.58) * distance;
         final double dotRadius = radius * (0.034 + (1 - t) * 0.018);
-        armPaint.color = Color.lerp(
+        armPaint.color =
+            Color.lerp(
               galaxy.armColor.withValues(alpha: 0.52),
               galaxy.coreColor.withValues(alpha: 0.14),
               t,
@@ -286,7 +439,12 @@ class _GalaxyTilePainter extends CustomPainter {
     }
   }
 
-  void _paintEllipticalGalaxy(Canvas canvas, Offset center, double radius, _GalaxyStamp galaxy) {
+  void _paintEllipticalGalaxy(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    _GalaxyStamp galaxy,
+  ) {
     final Rect rect = Rect.fromCenter(
       center: center,
       width: radius * 1.8,
@@ -311,9 +469,20 @@ class _GalaxyTilePainter extends CustomPainter {
     canvas.restore();
   }
 
-  void _paintRingGalaxy(Canvas canvas, Offset center, double radius, _GalaxyStamp galaxy) {
-    final Rect outerRect = Rect.fromCircle(center: center, radius: radius * 0.95);
-    final Rect innerRect = Rect.fromCircle(center: center, radius: radius * 0.52);
+  void _paintRingGalaxy(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    _GalaxyStamp galaxy,
+  ) {
+    final Rect outerRect = Rect.fromCircle(
+      center: center,
+      radius: radius * 0.95,
+    );
+    final Rect innerRect = Rect.fromCircle(
+      center: center,
+      radius: radius * 0.52,
+    );
     canvas.drawCircle(
       center,
       radius * 0.95,
@@ -321,7 +490,11 @@ class _GalaxyTilePainter extends CustomPainter {
         ..color = galaxy.armColor.withValues(alpha: 0.16)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
     );
-    canvas.drawCircle(center, radius * 0.52, Paint()..blendMode = BlendMode.clear);
+    canvas.drawCircle(
+      center,
+      radius * 0.52,
+      Paint()..blendMode = BlendMode.clear,
+    );
     final Path ring = Path()
       ..addOval(outerRect)
       ..addOval(innerRect);
@@ -335,7 +508,12 @@ class _GalaxyTilePainter extends CustomPainter {
     );
   }
 
-  void _paintLenticularGalaxy(Canvas canvas, Offset center, double radius, _GalaxyStamp galaxy) {
+  void _paintLenticularGalaxy(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    _GalaxyStamp galaxy,
+  ) {
     final Rect discRect = Rect.fromCenter(
       center: center,
       width: radius * 1.9,
@@ -364,9 +542,22 @@ class _GalaxyTilePainter extends CustomPainter {
     canvas.restore();
   }
 
-  void _paintDoubleCoreGalaxy(Canvas canvas, Offset center, double radius, _GalaxyStamp galaxy) {
-    final Offset a = center + Offset(math.cos(galaxy.rotation), math.sin(galaxy.rotation)) * radius * 0.22;
-    final Offset b = center - Offset(math.cos(galaxy.rotation), math.sin(galaxy.rotation)) * radius * 0.22;
+  void _paintDoubleCoreGalaxy(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    _GalaxyStamp galaxy,
+  ) {
+    final Offset a =
+        center +
+        Offset(math.cos(galaxy.rotation), math.sin(galaxy.rotation)) *
+            radius *
+            0.22;
+    final Offset b =
+        center -
+        Offset(math.cos(galaxy.rotation), math.sin(galaxy.rotation)) *
+            radius *
+            0.22;
     for (final Offset p in <Offset>[a, b]) {
       canvas.drawCircle(
         p,
@@ -385,15 +576,23 @@ class _GalaxyTilePainter extends CustomPainter {
     );
   }
 
-  void _paintClusterGalaxy(Canvas canvas, Offset center, double radius, _GalaxyStamp galaxy) {
+  void _paintClusterGalaxy(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    _GalaxyStamp galaxy,
+  ) {
     final math.Random random = math.Random(galaxy.seed);
-    final Paint paint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    final Paint paint = Paint()
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
     for (int i = 0; i < 70; i++) {
       final double angle = random.nextDouble() * math.pi * 2;
       final double dist = radius * math.sqrt(random.nextDouble()) * 1.15;
-      final Offset p = center + Offset(math.cos(angle), math.sin(angle) * 0.75) * dist;
+      final Offset p =
+          center + Offset(math.cos(angle), math.sin(angle) * 0.75) * dist;
       final double r = radius * (0.018 + random.nextDouble() * 0.028);
-      paint.color = Color.lerp(
+      paint.color =
+          Color.lerp(
             galaxy.coreColor.withValues(alpha: 0.55),
             galaxy.armColor.withValues(alpha: 0.18),
             random.nextDouble(),
@@ -403,7 +602,12 @@ class _GalaxyTilePainter extends CustomPainter {
     }
   }
 
-  void _paintArcGalaxy(Canvas canvas, Offset center, double radius, _GalaxyStamp galaxy) {
+  void _paintArcGalaxy(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    _GalaxyStamp galaxy,
+  ) {
     final Paint paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
@@ -425,11 +629,18 @@ class _GalaxyTilePainter extends CustomPainter {
     }
   }
 
-  void _paintIrregularGalaxy(Canvas canvas, Offset center, double radius, _GalaxyStamp galaxy) {
+  void _paintIrregularGalaxy(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    _GalaxyStamp galaxy,
+  ) {
     final math.Random random = math.Random(galaxy.seed);
-    final Paint paint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    final Paint paint = Paint()
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
     for (int i = 0; i < 110; i++) {
-      final Offset p = center +
+      final Offset p =
+          center +
           Offset(
             (random.nextDouble() - 0.5) * radius * 1.8,
             (random.nextDouble() - 0.5) * radius * 1.1,
@@ -442,17 +653,25 @@ class _GalaxyTilePainter extends CustomPainter {
     }
   }
 
-  void _paintDwarfSwarm(Canvas canvas, Offset center, double radius, _GalaxyStamp galaxy) {
+  void _paintDwarfSwarm(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    _GalaxyStamp galaxy,
+  ) {
     final math.Random random = math.Random(galaxy.seed);
-    final Paint paint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    final Paint paint = Paint()
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
     for (int i = 0; i < 9; i++) {
       final double angle = galaxy.rotation + i * 0.68;
       final double dist = radius * (0.25 + i * 0.12);
-      final Offset c = center + Offset(math.cos(angle), math.sin(angle) * 0.72) * dist;
+      final Offset c =
+          center + Offset(math.cos(angle), math.sin(angle) * 0.72) * dist;
       paint.color = galaxy.armColor.withValues(alpha: 0.18);
       canvas.drawCircle(c, radius * (0.16 - i * 0.01), paint);
       for (int j = 0; j < 18; j++) {
-        final Offset p = c +
+        final Offset p =
+            c +
             Offset(
               (random.nextDouble() - 0.5) * radius * 0.24,
               (random.nextDouble() - 0.5) * radius * 0.18,
@@ -529,128 +748,316 @@ enum _GalaxyShape {
   dwarfSwarm,
 }
 
-const List<_GalaxyBackgroundSpec> _galaxyBackgroundSpecs = <_GalaxyBackgroundSpec>[
-  _GalaxyBackgroundSpec(
-    seed: 11,
-    galaxies: <_GalaxyStamp>[
-      _GalaxyStamp(shape: _GalaxyShape.spiral, center: Offset(0.32, 0.34), radiusFactor: 0.11, rotation: 0.4, swirl: 6.2, coreColor: Color(0xFFFFF3C6), armColor: Color(0xFFAE8BFF), haloColor: Color(0xFF7A5CFF)),
-      _GalaxyStamp(shape: _GalaxyShape.arc, center: Offset(0.74, 0.64), radiusFactor: 0.08, rotation: 2.4, swirl: 5.4, coreColor: Color(0xFFFFE8BC), armColor: Color(0xFF65D7FF), haloColor: Color(0xFF2C8AD7)),
-    ],
-    starCount: 170,
-    starBright: Color(0xFFEFF6FF),
-    starMid: Color(0xFFBFD6FF),
-    starWarm: Color(0xFFFFF0C3),
-    starDim: Color(0x66FFFFFF),
-  ),
-  _GalaxyBackgroundSpec(
-    seed: 19,
-    galaxies: <_GalaxyStamp>[
-      _GalaxyStamp(shape: _GalaxyShape.barredSpiral, center: Offset(0.64, 0.3), radiusFactor: 0.12, rotation: 1.3, swirl: 6.8, coreColor: Color(0xFFFFE4D1), armColor: Color(0xFFFF74BC), haloColor: Color(0xFFA44BFF)),
-      _GalaxyStamp(shape: _GalaxyShape.cluster, center: Offset(0.24, 0.62), radiusFactor: 0.09, rotation: -0.6, swirl: 4.8, coreColor: Color(0xFFFFF4D8), armColor: Color(0xFF9A8BFF), haloColor: Color(0xFF5A4ED7), seed: 1902),
-    ],
-    starCount: 180,
-    starBright: Color(0xFFFFFFFF),
-    starMid: Color(0xFFE3C7FF),
-    starWarm: Color(0xFFFFE8BC),
-    starDim: Color(0x55F3E7FF),
-  ),
-  _GalaxyBackgroundSpec(
-    seed: 27,
-    galaxies: <_GalaxyStamp>[
-      _GalaxyStamp(shape: _GalaxyShape.elliptical, center: Offset(0.36, 0.28), radiusFactor: 0.1, rotation: 0.35, swirl: 0, coreColor: Color(0xFFFFF5D9), armColor: Color(0xFF5FFFD7), haloColor: Color(0xFF13AFA0)),
-      _GalaxyStamp(shape: _GalaxyShape.irregular, center: Offset(0.68, 0.68), radiusFactor: 0.08, rotation: 2.8, swirl: 0, coreColor: Color(0xFFF8FFE6), armColor: Color(0xFF69D6FF), haloColor: Color(0xFF277F9E), seed: 2711),
-    ],
-    starCount: 165,
-    starBright: Color(0xFFE8FFFF),
-    starMid: Color(0xFF89FFD6),
-    starWarm: Color(0xFFFFF1C9),
-    starDim: Color(0x663EE0FF),
-  ),
-  _GalaxyBackgroundSpec(
-    seed: 33,
-    galaxies: <_GalaxyStamp>[
-      _GalaxyStamp(shape: _GalaxyShape.ring, center: Offset(0.28, 0.62), radiusFactor: 0.11, rotation: 2.0, swirl: 0, coreColor: Color(0xFFFFF3D5), armColor: Color(0xFFFFB25B), haloColor: Color(0xFFBE5D15)),
-      _GalaxyStamp(shape: _GalaxyShape.arc, center: Offset(0.74, 0.34), radiusFactor: 0.09, rotation: -0.8, swirl: 4.0, coreColor: Color(0xFFFFF0C0), armColor: Color(0xFFFFD16B), haloColor: Color(0xFFA44414)),
-    ],
-    starCount: 172,
-    starBright: Color(0xFFFFF9E5),
-    starMid: Color(0xFFFFD695),
-    starWarm: Color(0xFFFFE4AE),
-    starDim: Color(0x66FFB36A),
-  ),
-  _GalaxyBackgroundSpec(
-    seed: 41,
-    galaxies: <_GalaxyStamp>[
-      _GalaxyStamp(shape: _GalaxyShape.lenticular, center: Offset(0.5, 0.36), radiusFactor: 0.12, rotation: 0.9, swirl: 0, coreColor: Color(0xFFFFFFFF), armColor: Color(0xFFC4BDFF), haloColor: Color(0xFF6768D6)),
-      _GalaxyStamp(shape: _GalaxyShape.dwarfSwarm, center: Offset(0.78, 0.72), radiusFactor: 0.06, rotation: 1.8, swirl: 0, coreColor: Color(0xFFF4FFF7), armColor: Color(0xFFA9FFF0), haloColor: Color(0xFF39C1A7), seed: 4178),
-    ],
-    starCount: 195,
-    starBright: Color(0xFFFFFFFF),
-    starMid: Color(0xFFD6E1FF),
-    starWarm: Color(0xFFFFF3D0),
-    starDim: Color(0x55D7D9FF),
-  ),
-  _GalaxyBackgroundSpec(
-    seed: 52,
-    galaxies: <_GalaxyStamp>[
-      _GalaxyStamp(shape: _GalaxyShape.doubleCore, center: Offset(0.32, 0.36), radiusFactor: 0.09, rotation: 0.7, swirl: 0, coreColor: Color(0xFFFFFFFF), armColor: Color(0xFF7EDBFF), haloColor: Color(0xFF1B7CCF)),
-      _GalaxyStamp(shape: _GalaxyShape.barredSpiral, center: Offset(0.66, 0.56), radiusFactor: 0.12, rotation: -1.1, swirl: 6.4, coreColor: Color(0xFFEAF5FF), armColor: Color(0xFF8194FF), haloColor: Color(0xFF2957AD)),
-    ],
-    starCount: 188,
-    starBright: Color(0xFFEFFFFF),
-    starMid: Color(0xFFB7E8FF),
-    starWarm: Color(0xFFFFF2D6),
-    starDim: Color(0x553AA6FF),
-  ),
-  _GalaxyBackgroundSpec(
-    seed: 63,
-    galaxies: <_GalaxyStamp>[
-      _GalaxyStamp(shape: _GalaxyShape.cluster, center: Offset(0.38, 0.54), radiusFactor: 0.11, rotation: 2.5, swirl: 0, coreColor: Color(0xFFFFF3D8), armColor: Color(0xFFFF8ACC), haloColor: Color(0xFFA93CF3), seed: 6301),
-      _GalaxyStamp(shape: _GalaxyShape.irregular, center: Offset(0.76, 0.28), radiusFactor: 0.08, rotation: 0.2, swirl: 0, coreColor: Color(0xFFFFF0E0), armColor: Color(0xFF9C8BFF), haloColor: Color(0xFF6138D1), seed: 6302),
-    ],
-    starCount: 178,
-    starBright: Color(0xFFFFF6FD),
-    starMid: Color(0xFFFFBAEA),
-    starWarm: Color(0xFFFFF2D0),
-    starDim: Color(0x556C4AFF),
-  ),
-  _GalaxyBackgroundSpec(
-    seed: 74,
-    galaxies: <_GalaxyStamp>[
-      _GalaxyStamp(shape: _GalaxyShape.arc, center: Offset(0.54, 0.42), radiusFactor: 0.11, rotation: -0.4, swirl: 4.2, coreColor: Color(0xFFF8FFE7), armColor: Color(0xFF8CFF9F), haloColor: Color(0xFF2F8A51)),
-      _GalaxyStamp(shape: _GalaxyShape.ring, center: Offset(0.22, 0.66), radiusFactor: 0.07, rotation: 1.8, swirl: 0, coreColor: Color(0xFFFFF3D4), armColor: Color(0xFFC6FF6F), haloColor: Color(0xFF708C21)),
-    ],
-    starCount: 176,
-    starBright: Color(0xFFF4FFF0),
-    starMid: Color(0xFFC9FFD4),
-    starWarm: Color(0xFFFFF3C9),
-    starDim: Color(0x5557DB82),
-  ),
-  _GalaxyBackgroundSpec(
-    seed: 81,
-    galaxies: <_GalaxyStamp>[
-      _GalaxyStamp(shape: _GalaxyShape.dwarfSwarm, center: Offset(0.3, 0.56), radiusFactor: 0.1, rotation: 1.2, swirl: 0, coreColor: Color(0xFFFFF6E3), armColor: Color(0xFFD2A2FF), haloColor: Color(0xFF8451CE), seed: 8101),
-      _GalaxyStamp(shape: _GalaxyShape.lenticular, center: Offset(0.68, 0.34), radiusFactor: 0.1, rotation: 2.9, swirl: 0, coreColor: Color(0xFFFFF0D4), armColor: Color(0xFFFFC571), haloColor: Color(0xFFBB6F2A)),
-    ],
-    starCount: 182,
-    starBright: Color(0xFFFFFFFF),
-    starMid: Color(0xFFE4C8FF),
-    starWarm: Color(0xFFFFE2B0),
-    starDim: Color(0x556E7BFF),
-  ),
-  _GalaxyBackgroundSpec(
-    seed: 97,
-    galaxies: <_GalaxyStamp>[
-      _GalaxyStamp(shape: _GalaxyShape.irregular, center: Offset(0.42, 0.42), radiusFactor: 0.12, rotation: 0.5, swirl: 0, coreColor: Color(0xFFF5FCFF), armColor: Color(0xFF83D2FF), haloColor: Color(0xFF4260DB), seed: 9701),
-      _GalaxyStamp(shape: _GalaxyShape.doubleCore, center: Offset(0.76, 0.72), radiusFactor: 0.06, rotation: -1.5, swirl: 0, coreColor: Color(0xFFF2FFF8), armColor: Color(0xFF8FFFE9), haloColor: Color(0xFF2B9A88)),
-    ],
-    starCount: 190,
-    starBright: Color(0xFFF4FEFF),
-    starMid: Color(0xFFBFE0FF),
-    starWarm: Color(0xFFFFF0D2),
-    starDim: Color(0x55367DFF),
-  ),
-];
+const List<_GalaxyBackgroundSpec> _galaxyBackgroundSpecs =
+    <_GalaxyBackgroundSpec>[
+      _GalaxyBackgroundSpec(
+        seed: 11,
+        galaxies: <_GalaxyStamp>[
+          _GalaxyStamp(
+            shape: _GalaxyShape.spiral,
+            center: Offset(0.32, 0.34),
+            radiusFactor: 0.11,
+            rotation: 0.4,
+            swirl: 6.2,
+            coreColor: Color(0xFFFFF3C6),
+            armColor: Color(0xFFAE8BFF),
+            haloColor: Color(0xFF7A5CFF),
+          ),
+          _GalaxyStamp(
+            shape: _GalaxyShape.arc,
+            center: Offset(0.74, 0.64),
+            radiusFactor: 0.08,
+            rotation: 2.4,
+            swirl: 5.4,
+            coreColor: Color(0xFFFFE8BC),
+            armColor: Color(0xFF65D7FF),
+            haloColor: Color(0xFF2C8AD7),
+          ),
+        ],
+        starCount: 170,
+        starBright: Color(0xFFEFF6FF),
+        starMid: Color(0xFFBFD6FF),
+        starWarm: Color(0xFFFFF0C3),
+        starDim: Color(0x66FFFFFF),
+      ),
+      _GalaxyBackgroundSpec(
+        seed: 19,
+        galaxies: <_GalaxyStamp>[
+          _GalaxyStamp(
+            shape: _GalaxyShape.barredSpiral,
+            center: Offset(0.64, 0.3),
+            radiusFactor: 0.12,
+            rotation: 1.3,
+            swirl: 6.8,
+            coreColor: Color(0xFFFFE4D1),
+            armColor: Color(0xFFFF74BC),
+            haloColor: Color(0xFFA44BFF),
+          ),
+          _GalaxyStamp(
+            shape: _GalaxyShape.cluster,
+            center: Offset(0.24, 0.62),
+            radiusFactor: 0.09,
+            rotation: -0.6,
+            swirl: 4.8,
+            coreColor: Color(0xFFFFF4D8),
+            armColor: Color(0xFF9A8BFF),
+            haloColor: Color(0xFF5A4ED7),
+            seed: 1902,
+          ),
+        ],
+        starCount: 180,
+        starBright: Color(0xFFFFFFFF),
+        starMid: Color(0xFFE3C7FF),
+        starWarm: Color(0xFFFFE8BC),
+        starDim: Color(0x55F3E7FF),
+      ),
+      _GalaxyBackgroundSpec(
+        seed: 27,
+        galaxies: <_GalaxyStamp>[
+          _GalaxyStamp(
+            shape: _GalaxyShape.elliptical,
+            center: Offset(0.36, 0.28),
+            radiusFactor: 0.1,
+            rotation: 0.35,
+            swirl: 0,
+            coreColor: Color(0xFFFFF5D9),
+            armColor: Color(0xFF5FFFD7),
+            haloColor: Color(0xFF13AFA0),
+          ),
+          _GalaxyStamp(
+            shape: _GalaxyShape.irregular,
+            center: Offset(0.68, 0.68),
+            radiusFactor: 0.08,
+            rotation: 2.8,
+            swirl: 0,
+            coreColor: Color(0xFFF8FFE6),
+            armColor: Color(0xFF69D6FF),
+            haloColor: Color(0xFF277F9E),
+            seed: 2711,
+          ),
+        ],
+        starCount: 165,
+        starBright: Color(0xFFE8FFFF),
+        starMid: Color(0xFF89FFD6),
+        starWarm: Color(0xFFFFF1C9),
+        starDim: Color(0x663EE0FF),
+      ),
+      _GalaxyBackgroundSpec(
+        seed: 33,
+        galaxies: <_GalaxyStamp>[
+          _GalaxyStamp(
+            shape: _GalaxyShape.ring,
+            center: Offset(0.28, 0.62),
+            radiusFactor: 0.11,
+            rotation: 2.0,
+            swirl: 0,
+            coreColor: Color(0xFFFFF3D5),
+            armColor: Color(0xFFFFB25B),
+            haloColor: Color(0xFFBE5D15),
+          ),
+          _GalaxyStamp(
+            shape: _GalaxyShape.arc,
+            center: Offset(0.74, 0.34),
+            radiusFactor: 0.09,
+            rotation: -0.8,
+            swirl: 4.0,
+            coreColor: Color(0xFFFFF0C0),
+            armColor: Color(0xFFFFD16B),
+            haloColor: Color(0xFFA44414),
+          ),
+        ],
+        starCount: 172,
+        starBright: Color(0xFFFFF9E5),
+        starMid: Color(0xFFFFD695),
+        starWarm: Color(0xFFFFE4AE),
+        starDim: Color(0x66FFB36A),
+      ),
+      _GalaxyBackgroundSpec(
+        seed: 41,
+        galaxies: <_GalaxyStamp>[
+          _GalaxyStamp(
+            shape: _GalaxyShape.lenticular,
+            center: Offset(0.5, 0.36),
+            radiusFactor: 0.12,
+            rotation: 0.9,
+            swirl: 0,
+            coreColor: Color(0xFFFFFFFF),
+            armColor: Color(0xFFC4BDFF),
+            haloColor: Color(0xFF6768D6),
+          ),
+          _GalaxyStamp(
+            shape: _GalaxyShape.dwarfSwarm,
+            center: Offset(0.78, 0.72),
+            radiusFactor: 0.06,
+            rotation: 1.8,
+            swirl: 0,
+            coreColor: Color(0xFFF4FFF7),
+            armColor: Color(0xFFA9FFF0),
+            haloColor: Color(0xFF39C1A7),
+            seed: 4178,
+          ),
+        ],
+        starCount: 195,
+        starBright: Color(0xFFFFFFFF),
+        starMid: Color(0xFFD6E1FF),
+        starWarm: Color(0xFFFFF3D0),
+        starDim: Color(0x55D7D9FF),
+      ),
+      _GalaxyBackgroundSpec(
+        seed: 52,
+        galaxies: <_GalaxyStamp>[
+          _GalaxyStamp(
+            shape: _GalaxyShape.doubleCore,
+            center: Offset(0.32, 0.36),
+            radiusFactor: 0.09,
+            rotation: 0.7,
+            swirl: 0,
+            coreColor: Color(0xFFFFFFFF),
+            armColor: Color(0xFF7EDBFF),
+            haloColor: Color(0xFF1B7CCF),
+          ),
+          _GalaxyStamp(
+            shape: _GalaxyShape.barredSpiral,
+            center: Offset(0.66, 0.56),
+            radiusFactor: 0.12,
+            rotation: -1.1,
+            swirl: 6.4,
+            coreColor: Color(0xFFEAF5FF),
+            armColor: Color(0xFF8194FF),
+            haloColor: Color(0xFF2957AD),
+          ),
+        ],
+        starCount: 188,
+        starBright: Color(0xFFEFFFFF),
+        starMid: Color(0xFFB7E8FF),
+        starWarm: Color(0xFFFFF2D6),
+        starDim: Color(0x553AA6FF),
+      ),
+      _GalaxyBackgroundSpec(
+        seed: 63,
+        galaxies: <_GalaxyStamp>[
+          _GalaxyStamp(
+            shape: _GalaxyShape.cluster,
+            center: Offset(0.38, 0.54),
+            radiusFactor: 0.11,
+            rotation: 2.5,
+            swirl: 0,
+            coreColor: Color(0xFFFFF3D8),
+            armColor: Color(0xFFFF8ACC),
+            haloColor: Color(0xFFA93CF3),
+            seed: 6301,
+          ),
+          _GalaxyStamp(
+            shape: _GalaxyShape.irregular,
+            center: Offset(0.76, 0.28),
+            radiusFactor: 0.08,
+            rotation: 0.2,
+            swirl: 0,
+            coreColor: Color(0xFFFFF0E0),
+            armColor: Color(0xFF9C8BFF),
+            haloColor: Color(0xFF6138D1),
+            seed: 6302,
+          ),
+        ],
+        starCount: 178,
+        starBright: Color(0xFFFFF6FD),
+        starMid: Color(0xFFFFBAEA),
+        starWarm: Color(0xFFFFF2D0),
+        starDim: Color(0x556C4AFF),
+      ),
+      _GalaxyBackgroundSpec(
+        seed: 74,
+        galaxies: <_GalaxyStamp>[
+          _GalaxyStamp(
+            shape: _GalaxyShape.arc,
+            center: Offset(0.54, 0.42),
+            radiusFactor: 0.11,
+            rotation: -0.4,
+            swirl: 4.2,
+            coreColor: Color(0xFFF8FFE7),
+            armColor: Color(0xFF8CFF9F),
+            haloColor: Color(0xFF2F8A51),
+          ),
+          _GalaxyStamp(
+            shape: _GalaxyShape.ring,
+            center: Offset(0.22, 0.66),
+            radiusFactor: 0.07,
+            rotation: 1.8,
+            swirl: 0,
+            coreColor: Color(0xFFFFF3D4),
+            armColor: Color(0xFFC6FF6F),
+            haloColor: Color(0xFF708C21),
+          ),
+        ],
+        starCount: 176,
+        starBright: Color(0xFFF4FFF0),
+        starMid: Color(0xFFC9FFD4),
+        starWarm: Color(0xFFFFF3C9),
+        starDim: Color(0x5557DB82),
+      ),
+      _GalaxyBackgroundSpec(
+        seed: 81,
+        galaxies: <_GalaxyStamp>[
+          _GalaxyStamp(
+            shape: _GalaxyShape.dwarfSwarm,
+            center: Offset(0.3, 0.56),
+            radiusFactor: 0.1,
+            rotation: 1.2,
+            swirl: 0,
+            coreColor: Color(0xFFFFF6E3),
+            armColor: Color(0xFFD2A2FF),
+            haloColor: Color(0xFF8451CE),
+            seed: 8101,
+          ),
+          _GalaxyStamp(
+            shape: _GalaxyShape.lenticular,
+            center: Offset(0.68, 0.34),
+            radiusFactor: 0.1,
+            rotation: 2.9,
+            swirl: 0,
+            coreColor: Color(0xFFFFF0D4),
+            armColor: Color(0xFFFFC571),
+            haloColor: Color(0xFFBB6F2A),
+          ),
+        ],
+        starCount: 182,
+        starBright: Color(0xFFFFFFFF),
+        starMid: Color(0xFFE4C8FF),
+        starWarm: Color(0xFFFFE2B0),
+        starDim: Color(0x556E7BFF),
+      ),
+      _GalaxyBackgroundSpec(
+        seed: 97,
+        galaxies: <_GalaxyStamp>[
+          _GalaxyStamp(
+            shape: _GalaxyShape.irregular,
+            center: Offset(0.42, 0.42),
+            radiusFactor: 0.12,
+            rotation: 0.5,
+            swirl: 0,
+            coreColor: Color(0xFFF5FCFF),
+            armColor: Color(0xFF83D2FF),
+            haloColor: Color(0xFF4260DB),
+            seed: 9701,
+          ),
+          _GalaxyStamp(
+            shape: _GalaxyShape.doubleCore,
+            center: Offset(0.76, 0.72),
+            radiusFactor: 0.06,
+            rotation: -1.5,
+            swirl: 0,
+            coreColor: Color(0xFFF2FFF8),
+            armColor: Color(0xFF8FFFE9),
+            haloColor: Color(0xFF2B9A88),
+          ),
+        ],
+        starCount: 190,
+        starBright: Color(0xFFF4FEFF),
+        starMid: Color(0xFFBFE0FF),
+        starWarm: Color(0xFFFFF0D2),
+        starDim: Color(0x55367DFF),
+      ),
+    ];
 
 class _BottomRibbon extends StatelessWidget {
   const _BottomRibbon({
@@ -666,9 +1073,9 @@ class _BottomRibbon extends StatelessWidget {
   final VoidCallback onOpenWar;
 
   void _showPlaceholder(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label coming soon.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label coming soon.')));
   }
 
   @override
@@ -697,6 +1104,7 @@ class _BottomRibbon extends StatelessWidget {
 
     return switch (designIndex) {
       0 => _buildClassic(context, actions),
+      10 => _buildColorClassic(context, actions),
       1 => _buildGlassRail(context, actions),
       2 => _buildSpeedTabs(context, actions),
       3 => _buildInsetConsole(context, actions),
@@ -717,11 +1125,19 @@ class _BottomRibbon extends StatelessWidget {
     double spacing = 0.45,
   }) {
     return Theme.of(context).textTheme.labelMedium!.copyWith(
-          color: color,
-          fontSize: size,
-          fontWeight: weight,
-          letterSpacing: spacing,
-        );
+      color: color,
+      fontSize: size,
+      fontWeight: weight,
+      letterSpacing: spacing,
+    );
+  }
+
+  Color _purpleRibbonTierColor(int tier) {
+    final HSLColor source = HSLColor.fromColor(
+      factionTierColor(SoldierDesignPalette.red, tier),
+    );
+    final double purpleHue = HSLColor.fromColor(const Color(0xFFA44BFF)).hue;
+    return source.withHue(purpleHue).toColor();
   }
 
   Widget _circleShell({
@@ -802,14 +1218,6 @@ class _BottomRibbon extends StatelessWidget {
       height: 98,
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          const double buttonHeight = 81.84;
-          const double warWidthScale = 1.10;
-          const double warHeightScale = 1.18;
-          const double preferredPanelWidth = 696.0;
-          final double panelWidth =
-              math.min(constraints.maxWidth, preferredPanelWidth);
-          final double baseButtonWidth =
-              math.max(0, panelWidth / ((actions.length - 1) + warWidthScale));
           final List<Color> accentColors = <Color>[
             factionTierColor(SoldierDesignPalette.red, 1),
             factionTierColor(SoldierDesignPalette.red, 3),
@@ -882,81 +1290,256 @@ class _BottomRibbon extends StatelessWidget {
             1.00,
             1.00,
           ];
-          final List<double> buttonWidths = <double>[
-            baseButtonWidth,
-            baseButtonWidth,
-            baseButtonWidth,
-            baseButtonWidth * warWidthScale,
-            baseButtonWidth,
-            baseButtonWidth,
-            baseButtonWidth,
-          ];
-          final List<double> buttonHeights = <double>[
-            buttonHeight,
-            buttonHeight,
-            buttonHeight,
-            buttonHeight * warHeightScale,
-            buttonHeight,
-            buttonHeight,
-            buttonHeight,
-          ];
-          final double totalButtonsWidth =
-              buttonWidths.reduce((double a, double b) => a + b);
-          final double rowLeft = (panelWidth - totalButtonsWidth) / 2;
-          final List<double> buttonLefts = <double>[];
-          double currentLeft = rowLeft;
-          for (int index = 0; index < actions.length; index++) {
-            buttonLefts.add(currentLeft);
-            currentLeft += buttonWidths[index];
-          }
-          final List<_RibbonPolygonButtonSpec> specs = <_RibbonPolygonButtonSpec>[
-            for (int index = 0; index < actions.length; index++)
-              _RibbonPolygonButtonSpec(
-                label: actions[index].label,
-                onTap: actions[index].onTap,
-                assetPath:
-                    'image/button_${actions[index].label.toLowerCase()}.png',
-                polygon: <Offset>[
-                  Offset(
-                    buttonLefts[index],
-                    (buttonHeight - buttonHeights[index]).clamp(-1000, 1000),
-                  ),
-                  Offset(
-                    buttonLefts[index] + buttonWidths[index],
-                    (buttonHeight - buttonHeights[index]).clamp(-1000, 1000),
-                  ),
-                  Offset(
-                    buttonLefts[index] + buttonWidths[index],
-                    buttonHeight,
-                  ),
-                  Offset(buttonLefts[index], buttonHeight),
-                ],
-                accentColor: accentColors[index],
-                fill: fillColors[index],
-                border: borderColors[index],
-                imageDeltaXWidthUnits: imageDxWidthUnits[index],
-                imageDeltaYHeightUnits: imageDyHeightUnits[index],
-                glowDeltaYHeightUnits: glowDyHeightUnits[index],
-                imageScaleRatio: imageScaleRatios[index],
-                visualScaleRatio: visualScaleRatios[index],
-              ),
-          ];
-          return Align(
-            alignment: Alignment.bottomCenter,
-            child: Transform.translate(
-              offset: const Offset(0, 8.184),
-              child: SizedBox(
-                width: panelWidth,
-                height: buttonHeight,
-                child: _PolygonRibbonPanel(
-                  specs: specs,
-                  labelStyle: labelStyle,
-                  panelSize: Size(panelWidth, buttonHeight),
-                ),
-              ),
-            ),
+          return _buildPolygonClassicPanel(
+            constraints: constraints,
+            actions: actions,
+            labelStyle: labelStyle,
+            accentColors: accentColors,
+            fillColors: fillColors,
+            borderColors: borderColors,
+            imageDxWidthUnits: imageDxWidthUnits,
+            imageDyHeightUnits: imageDyHeightUnits,
+            glowDyHeightUnits: glowDyHeightUnits,
+            imageScaleRatios: imageScaleRatios,
+            visualScaleRatios: visualScaleRatios,
+            showGlow: true,
+            contentOffsetYPx: 0,
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildColorClassic(BuildContext context, List<_RibbonAction> actions) {
+    final TextStyle labelStyle = _labelStyle(
+      context,
+      color: Colors.white.withValues(alpha: 0.95),
+      size: 10,
+      weight: FontWeight.w800,
+      spacing: 0.35,
+    );
+    return SizedBox(
+      height: 98,
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final List<Color> accentColors = <Color>[
+            factionTierColor(SoldierDesignPalette.red, 1),
+            factionTierColor(SoldierDesignPalette.yellow, 1),
+            factionTierColor(SoldierDesignPalette.blue, 1),
+            _purpleRibbonTierColor(1),
+            factionTierColor(SoldierDesignPalette.blue, 1),
+            factionTierColor(SoldierDesignPalette.yellow, 1),
+            factionTierColor(SoldierDesignPalette.red, 1),
+          ];
+          final List<Color> fillColors = <Color>[
+            factionTierColor(
+              SoldierDesignPalette.red,
+              3,
+            ).withValues(alpha: 0.5),
+            factionTierColor(
+              SoldierDesignPalette.yellow,
+              3,
+            ).withValues(alpha: 0.5),
+            factionTierColor(
+              SoldierDesignPalette.blue,
+              3,
+            ).withValues(alpha: 0.5),
+            _purpleRibbonTierColor(3).withValues(alpha: 0.5),
+            factionTierColor(
+              SoldierDesignPalette.blue,
+              3,
+            ).withValues(alpha: 0.5),
+            factionTierColor(
+              SoldierDesignPalette.yellow,
+              3,
+            ).withValues(alpha: 0.5),
+            factionTierColor(
+              SoldierDesignPalette.red,
+              3,
+            ).withValues(alpha: 0.5),
+          ];
+          final List<Color> borderColors = <Color>[
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+            Colors.transparent,
+          ];
+          const List<double> imageDxWidthUnits = <double>[
+            0.01,
+            0.00,
+            0.00,
+            -0.01,
+            0.00,
+            0.00,
+            0.00,
+          ];
+          const List<double> imageDyHeightUnits = <double>[
+            0.03,
+            0.01,
+            0.00,
+            0.055,
+            0.00,
+            0.02,
+            0.00,
+          ];
+          const List<double> glowDyHeightUnits = <double>[
+            0.00,
+            0.00,
+            0.00,
+            0.04,
+            0.00,
+            0.00,
+            0.00,
+          ];
+          const List<double> imageScaleRatios = <double>[
+            1.27,
+            0.95,
+            1.31,
+            1.495,
+            1.20,
+            0.97,
+            1.16,
+          ];
+          const List<double> visualScaleRatios = <double>[
+            1.00,
+            1.00,
+            1.00,
+            1.00,
+            1.00,
+            1.00,
+            1.00,
+          ];
+          return _buildPolygonClassicPanel(
+            constraints: constraints,
+            actions: actions,
+            labelStyle: labelStyle,
+            accentColors: accentColors,
+            fillColors: fillColors,
+            borderColors: borderColors,
+            imageDxWidthUnits: imageDxWidthUnits,
+            imageDyHeightUnits: imageDyHeightUnits,
+            glowDyHeightUnits: glowDyHeightUnits,
+            imageScaleRatios: imageScaleRatios,
+            visualScaleRatios: visualScaleRatios,
+            showGlow: false,
+            contentOffsetYPx: -10,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPolygonClassicPanel({
+    required BoxConstraints constraints,
+    required List<_RibbonAction> actions,
+    required TextStyle labelStyle,
+    required List<Color> accentColors,
+    required List<Color> fillColors,
+    required List<Color> borderColors,
+    required List<double> imageDxWidthUnits,
+    required List<double> imageDyHeightUnits,
+    required List<double> glowDyHeightUnits,
+    required List<double> imageScaleRatios,
+    required List<double> visualScaleRatios,
+    required bool showGlow,
+    required double contentOffsetYPx,
+  }) {
+    const double buttonHeight = 81.84;
+    const double warWidthScale = 1.10;
+    const double warHeightScale = 1.18;
+    const double preferredPanelWidth = 696.0;
+    final double panelWidth = math.min(
+      constraints.maxWidth,
+      preferredPanelWidth,
+    );
+    final double baseButtonWidth = math.max(
+      0,
+      panelWidth / ((actions.length - 1) + warWidthScale),
+    );
+    final List<double> buttonWidths = <double>[
+      baseButtonWidth,
+      baseButtonWidth,
+      baseButtonWidth,
+      baseButtonWidth * warWidthScale,
+      baseButtonWidth,
+      baseButtonWidth,
+      baseButtonWidth,
+    ];
+    final List<double> buttonHeights = <double>[
+      buttonHeight,
+      buttonHeight,
+      buttonHeight,
+      buttonHeight * warHeightScale,
+      buttonHeight,
+      buttonHeight,
+      buttonHeight,
+    ];
+    final double totalButtonsWidth = buttonWidths.reduce(
+      (double a, double b) => a + b,
+    );
+    final double rowLeft = (panelWidth - totalButtonsWidth) / 2;
+    final List<double> buttonLefts = <double>[];
+    double currentLeft = rowLeft;
+    for (int index = 0; index < actions.length; index++) {
+      buttonLefts.add(currentLeft);
+      currentLeft += buttonWidths[index];
+    }
+    final List<_RibbonPolygonButtonSpec> specs = <_RibbonPolygonButtonSpec>[
+      for (int index = 0; index < actions.length; index++)
+        (() {
+          final double left = buttonLefts[index];
+          final double right = buttonLefts[index] + buttonWidths[index];
+          final double top = (buttonHeight - buttonHeights[index]).clamp(
+            -1000,
+            1000,
+          );
+          final double midY = (top + buttonHeight) / 2;
+          final double inset = math.min(
+            buttonWidths[index] * 0.16,
+            buttonHeights[index] * 0.24,
+          );
+          return _RibbonPolygonButtonSpec(
+            label: actions[index].label,
+            onTap: actions[index].onTap,
+            assetPath: 'image/button_${actions[index].label.toLowerCase()}.png',
+            polygon: <Offset>[
+              Offset(left + inset, top),
+              Offset(right - inset, top),
+              Offset(right, midY),
+              Offset(right - inset, buttonHeight),
+              Offset(left + inset, buttonHeight),
+              Offset(left, midY),
+            ],
+            accentColor: accentColors[index],
+            fill: fillColors[index],
+            border: borderColors[index],
+            imageDeltaXWidthUnits: imageDxWidthUnits[index],
+            imageDeltaYHeightUnits: imageDyHeightUnits[index],
+            glowDeltaYHeightUnits: glowDyHeightUnits[index],
+            imageScaleRatio: imageScaleRatios[index],
+            visualScaleRatio: visualScaleRatios[index],
+            showGlow: showGlow,
+            paintPolygonSurface: showGlow,
+            contentOffsetYPx: contentOffsetYPx,
+          );
+        })(),
+    ];
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Transform.translate(
+        offset: const Offset(0, 8.184),
+        child: SizedBox(
+          width: panelWidth,
+          height: buttonHeight,
+          child: _PolygonRibbonPanel(
+            specs: specs,
+            labelStyle: labelStyle,
+            panelSize: Size(panelWidth, buttonHeight),
+          ),
+        ),
       ),
     );
   }
@@ -978,7 +1561,11 @@ class _BottomRibbon extends StatelessWidget {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: <Color>[Color(0x442E6B8D), Color(0x88202B40), Color(0x443667AA)],
+                  colors: <Color>[
+                    Color(0x442E6B8D),
+                    Color(0x88202B40),
+                    Color(0x443667AA),
+                  ],
                 ),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
                 boxShadow: <BoxShadow>[
@@ -1027,7 +1614,9 @@ class _BottomRibbon extends StatelessWidget {
                       border: const Color(0xFF87E8FF).withValues(alpha: 0.78),
                       shadows: <BoxShadow>[
                         BoxShadow(
-                          color: const Color(0xFF52D8FF).withValues(alpha: 0.18),
+                          color: const Color(
+                            0xFF52D8FF,
+                          ).withValues(alpha: 0.18),
                           blurRadius: 14,
                           spreadRadius: 0,
                         ),
@@ -1043,16 +1632,15 @@ class _BottomRibbon extends StatelessWidget {
   }
 
   Widget _buildSpeedTabs(BuildContext context, List<_RibbonAction> actions) {
-    final List<double> yOffsets = List<double>.generate(
-      actions.length,
-      (int i) {
-        if (actions.length <= 1) {
-          return 0;
-        }
-        final double t = i / (actions.length - 1);
-        return 4.0 - 8.0 * t;
-      },
-    );
+    final List<double> yOffsets = List<double>.generate(actions.length, (
+      int i,
+    ) {
+      if (actions.length <= 1) {
+        return 0;
+      }
+      final double t = i / (actions.length - 1);
+      return 4.0 - 8.0 * t;
+    });
     return SizedBox(
       height: 124,
       child: Stack(
@@ -1066,7 +1654,11 @@ class _BottomRibbon extends StatelessWidget {
               height: 18,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: <Color>[Color(0x002A2A2A), Color(0xAA8A1228), Color(0x66F06452)],
+                  colors: <Color>[
+                    Color(0x002A2A2A),
+                    Color(0xAA8A1228),
+                    Color(0x66F06452),
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(999),
               ),
@@ -1080,7 +1672,11 @@ class _BottomRibbon extends StatelessWidget {
               height: 9,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: <Color>[Color(0x0013151A), Color(0x88F6904E), Color(0x00F6904E)],
+                  colors: <Color>[
+                    Color(0x0013151A),
+                    Color(0x88F6904E),
+                    Color(0x00F6904E),
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(999),
               ),
@@ -1168,7 +1764,9 @@ class _BottomRibbon extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.28),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.06),
+                      ),
                     ),
                   ),
                 );
@@ -1235,7 +1833,11 @@ class _BottomRibbon extends StatelessWidget {
               height: 14,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: <Color>[Color(0x222A2B3A), Color(0x88393E59), Color(0x222A2B3A)],
+                  colors: <Color>[
+                    Color(0x222A2B3A),
+                    Color(0x88393E59),
+                    Color(0x222A2B3A),
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(999),
               ),
@@ -1252,7 +1854,10 @@ class _BottomRibbon extends StatelessWidget {
                 width: 66,
                 topOffset: yOffsets[index % yOffsets.length],
                 gap: 6,
-                labelStyle: _labelStyle(context, color: Colors.white.withValues(alpha: 0.92)),
+                labelStyle: _labelStyle(
+                  context,
+                  color: Colors.white.withValues(alpha: 0.92),
+                ),
                 button: SizedBox(
                   width: 58,
                   height: 68,
@@ -1276,7 +1881,9 @@ class _BottomRibbon extends StatelessWidget {
                         border: Colors.white.withValues(alpha: 0.58),
                         shadows: <BoxShadow>[
                           BoxShadow(
-                            color: const Color(0xFF8A83FF).withValues(alpha: 0.18),
+                            color: const Color(
+                              0xFF8A83FF,
+                            ).withValues(alpha: 0.18),
                             blurRadius: 14,
                             spreadRadius: 1,
                           ),
@@ -1307,7 +1914,11 @@ class _BottomRibbon extends StatelessWidget {
               height: 30,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: <Color>[Color(0x00121118), Color(0xAA44244F), Color(0x663488C8)],
+                  colors: <Color>[
+                    Color(0x00121118),
+                    Color(0xAA44244F),
+                    Color(0x663488C8),
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(999),
               ),
@@ -1392,7 +2003,11 @@ class _BottomRibbon extends StatelessWidget {
                   height: 24,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: <Color>[Color(0x22305068), Color(0xAA111C2E), Color(0x22305068)],
+                      colors: <Color>[
+                        Color(0x22305068),
+                        Color(0xAA111C2E),
+                        Color(0x22305068),
+                      ],
                     ),
                     borderRadius: BorderRadius.circular(999),
                   ),
@@ -1443,7 +2058,10 @@ class _BottomRibbon extends StatelessWidget {
     );
   }
 
-  Widget _buildConnectedTrain(BuildContext context, List<_RibbonAction> actions) {
+  Widget _buildConnectedTrain(
+    BuildContext context,
+    List<_RibbonAction> actions,
+  ) {
     final TextStyle labelStyle = _labelStyle(
       context,
       color: const Color(0xFFFFF2D8),
@@ -1458,10 +2076,16 @@ class _BottomRibbon extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
-            colors: <Color>[Color(0xFF3B2114), Color(0xFF7A3C19), Color(0xFF3B2114)],
+            colors: <Color>[
+              Color(0xFF3B2114),
+              Color(0xFF7A3C19),
+              Color(0xFF3B2114),
+            ],
           ),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFFFFD597).withValues(alpha: 0.42)),
+          border: Border.all(
+            color: const Color(0xFFFFD597).withValues(alpha: 0.42),
+          ),
           boxShadow: <BoxShadow>[
             BoxShadow(
               color: const Color(0xFFCC7B35).withValues(alpha: 0.22),
@@ -1476,9 +2100,12 @@ class _BottomRibbon extends StatelessWidget {
             final BorderRadius radius = BorderRadius.only(
               topLeft: index == 0 ? const Radius.circular(999) : Radius.zero,
               bottomLeft: index == 0 ? const Radius.circular(999) : Radius.zero,
-              topRight: index == actions.length - 1 ? const Radius.circular(999) : Radius.zero,
-              bottomRight:
-                  index == actions.length - 1 ? const Radius.circular(999) : Radius.zero,
+              topRight: index == actions.length - 1
+                  ? const Radius.circular(999)
+                  : Radius.zero,
+              bottomRight: index == actions.length - 1
+                  ? const Radius.circular(999)
+                  : Radius.zero,
             );
             return Expanded(
               child: Material(
@@ -1493,7 +2120,9 @@ class _BottomRibbon extends StatelessWidget {
                       border: Border(
                         right: index == actions.length - 1
                             ? BorderSide.none
-                            : BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                            : BorderSide(
+                                color: Colors.white.withValues(alpha: 0.08),
+                              ),
                       ),
                     ),
                     child: Column(
@@ -1506,7 +2135,9 @@ class _BottomRibbon extends StatelessWidget {
                             shape: BoxShape.circle,
                             color: Colors.black.withValues(alpha: 0.18),
                             border: Border.all(
-                              color: const Color(0xFFFFE5B4).withValues(alpha: 0.5),
+                              color: const Color(
+                                0xFFFFE5B4,
+                              ).withValues(alpha: 0.5),
                             ),
                           ),
                         ),
@@ -1567,7 +2198,9 @@ class _BottomRibbon extends StatelessWidget {
                         height: 56,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                          ),
                         ),
                       ),
                       _circleShell(
@@ -1578,7 +2211,9 @@ class _BottomRibbon extends StatelessWidget {
                         border: Colors.white.withValues(alpha: 0.62),
                         shadows: <BoxShadow>[
                           BoxShadow(
-                            color: const Color(0xFF78F0FF).withValues(alpha: 0.18),
+                            color: const Color(
+                              0xFF78F0FF,
+                            ).withValues(alpha: 0.18),
                             blurRadius: 12,
                             spreadRadius: 1,
                           ),
@@ -1611,7 +2246,9 @@ class _BottomRibbon extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF151C2B).withValues(alpha: 0.94),
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFBCCCF1).withValues(alpha: 0.24)),
+          border: Border.all(
+            color: const Color(0xFFBCCCF1).withValues(alpha: 0.24),
+          ),
           boxShadow: <BoxShadow>[
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.34),
@@ -1640,7 +2277,9 @@ class _BottomRibbon extends StatelessWidget {
                           colors: <Color>[Color(0xFF859AC4), Color(0xFF2B3956)],
                         ),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18),
+                        ),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1651,7 +2290,9 @@ class _BottomRibbon extends StatelessWidget {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(8),
                               color: Colors.black.withValues(alpha: 0.16),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.16),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -1675,10 +2316,7 @@ class _BottomRibbon extends StatelessWidget {
 }
 
 class _RibbonAction {
-  const _RibbonAction({
-    required this.label,
-    required this.onTap,
-  });
+  const _RibbonAction({required this.label, required this.onTap});
 
   final String label;
   final VoidCallback onTap;
@@ -1719,11 +2357,7 @@ class _ActionTile extends StatelessWidget {
               children: <Widget>[
                 Center(child: button),
                 SizedBox(height: gap),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: labelStyle,
-                ),
+                Text(label, textAlign: TextAlign.center, style: labelStyle),
               ],
             ),
           ),
@@ -1783,6 +2417,9 @@ class _RibbonPolygonButtonSpec {
     required this.glowDeltaYHeightUnits,
     required this.imageScaleRatio,
     required this.visualScaleRatio,
+    this.showGlow = true,
+    this.paintPolygonSurface = true,
+    this.contentOffsetYPx = 0,
   });
 
   final String label;
@@ -1797,6 +2434,9 @@ class _RibbonPolygonButtonSpec {
   final double glowDeltaYHeightUnits;
   final double imageScaleRatio;
   final double visualScaleRatio;
+  final bool showGlow;
+  final bool paintPolygonSurface;
+  final double contentOffsetYPx;
 }
 
 class _PolygonRibbonPanel extends StatefulWidget {
@@ -1821,7 +2461,8 @@ class _PolygonRibbonPanel extends StatefulWidget {
       final bool intersect =
           ((a.dy > p.dy) != (b.dy > p.dy)) &&
           (p.dx <
-              (b.dx - a.dx) * (p.dy - a.dy) /
+              (b.dx - a.dx) *
+                      (p.dy - a.dy) /
                       ((b.dy - a.dy) == 0 ? 1e-9 : (b.dy - a.dy)) +
                   a.dx);
       if (intersect) inside = !inside;
@@ -1855,7 +2496,8 @@ class _PolygonRibbonPanelState extends State<_PolygonRibbonPanel>
       return;
     }
     final double dt =
-        (elapsed - _lastTickElapsed!).inMicroseconds / Duration.microsecondsPerSecond;
+        (elapsed - _lastTickElapsed!).inMicroseconds /
+        Duration.microsecondsPerSecond;
     _lastTickElapsed = elapsed;
     if (!mounted || _pressedIndex == null || !_isPointerInsidePressedButton) {
       return;
@@ -1938,7 +2580,10 @@ class _PolygonRibbonPanelState extends State<_PolygonRibbonPanel>
         final Offset point = details.localPosition;
         int? pressedIndex;
         for (int index = widget.specs.length - 1; index >= 0; index--) {
-          if (_PolygonRibbonPanel.pointInPolygon(point, widget.specs[index].polygon)) {
+          if (_PolygonRibbonPanel.pointInPolygon(
+            point,
+            widget.specs[index].polygon,
+          )) {
             pressedIndex = index;
             break;
           }
@@ -1999,10 +2644,9 @@ class _PolygonRibbonPanelState extends State<_PolygonRibbonPanel>
           devicePixelRatio: MediaQuery.of(context).devicePixelRatio,
           imagesByAssetPath: _imagesByAssetPath,
           pressedIndex: _isPointerInsidePressedButton ? _pressedIndex : null,
-          pressedScale:
-              _isPointerInsidePressedButton
-                  ? math.min(1.3, 1 + _pressScaleSpeed * _pressElapsedSeconds)
-                  : 1,
+          pressedScale: _isPointerInsidePressedButton
+              ? math.min(1.3, 1 + _pressScaleSpeed * _pressElapsedSeconds)
+              : 1,
         ),
       ),
     );
@@ -2051,17 +2695,16 @@ class _PolygonRibbonPainter extends CustomPainter {
     for (int index = 0; index < specs.length; index++) {
       final _RibbonPolygonButtonSpec spec = specs[index];
       final Path path = Path()..addPolygon(spec.polygon, true);
-      canvas.drawPath(
-        path,
-        Paint()..color = spec.fill,
-      );
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = spec.border
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2,
-      );
+      if (spec.paintPolygonSurface) {
+        canvas.drawPath(path, Paint()..color = spec.fill);
+        canvas.drawPath(
+          path,
+          Paint()
+            ..color = spec.border
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.2,
+        );
+      }
 
       final double minX = spec.polygon.map((Offset p) => p.dx).reduce(math.min);
       final double maxX = spec.polygon.map((Offset p) => p.dx).reduce(math.max);
@@ -2088,20 +2731,21 @@ class _PolygonRibbonPainter extends CustomPainter {
         );
         final Rect inputSubrect = Alignment.center.inscribe(
           fitted.source,
-          Offset.zero &
-              Size(image.width.toDouble(), image.height.toDouble()),
+          Offset.zero & Size(image.width.toDouble(), image.height.toDouble()),
         );
-        final Rect baseOutputSubrect =
-            Alignment.center.inscribe(fitted.destination, contentRect);
+        final Rect baseOutputSubrect = Alignment.center.inscribe(
+          fitted.destination,
+          contentRect,
+        );
         final Rect outputSubrect = baseOutputSubrect.shift(
           Offset(
             spec.imageDeltaXWidthUnits * bounds.width,
-            spec.imageDeltaYHeightUnits * bounds.height,
+            spec.imageDeltaYHeightUnits * bounds.height + spec.contentOffsetYPx,
           ),
         );
         final Offset imageGlowCenter = contentRect.center.translate(
           0,
-          spec.glowDeltaYHeightUnits * bounds.height,
+          spec.glowDeltaYHeightUnits * bounds.height + spec.contentOffsetYPx,
         );
         final double imageGlowRadius =
             math.max(contentRect.width, contentRect.height) *
@@ -2120,29 +2764,51 @@ class _PolygonRibbonPainter extends CustomPainter {
             ..scale(scale, scale)
             ..translate(-pivot.dx, -pivot.dy);
         }
-        final Path outerHexGlow = _buildHexagonPath(
-          imageGlowCenter,
-          imageGlowRadius * 0.71,
-        );
-        final Path innerHexGlow = _buildHexagonPath(
-          imageGlowCenter,
-          imageGlowRadius * 0.61,
-        );
-        canvas.save();
-        canvas.transform(pivotScaleMatrix(glowPivot, effectiveScale).storage);
-        canvas.drawPath(
-          outerHexGlow,
-          Paint()
-            ..color = Colors.white.withValues(alpha: 0.54)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-        );
-        canvas.drawPath(
-          innerHexGlow,
-          Paint()
-            ..color = Colors.white.withValues(alpha: 0.74)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0),
-        );
-        canvas.restore();
+
+        if (spec.showGlow) {
+          final Path outerHexGlow = _buildHexagonPath(
+            imageGlowCenter,
+            imageGlowRadius * 0.71,
+          );
+          final Path innerHexGlow = _buildHexagonPath(
+            imageGlowCenter,
+            imageGlowRadius * 0.61,
+          );
+          canvas.save();
+          canvas.transform(pivotScaleMatrix(glowPivot, effectiveScale).storage);
+          canvas.drawPath(
+            outerHexGlow,
+            Paint()
+              ..color = Colors.white.withValues(alpha: 0.54)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+          );
+          canvas.drawPath(
+            innerHexGlow,
+            Paint()
+              ..color = Colors.white.withValues(alpha: 0.74)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0),
+          );
+          canvas.restore();
+        } else {
+          final Path outerHex = _buildHexagonPath(
+            imageGlowCenter,
+            imageGlowRadius * 0.71,
+          );
+          final Color badgeFill = spec.fill.withValues(
+            alpha: math.min(1.0, spec.fill.a + 0.08),
+          );
+          canvas.save();
+          canvas.transform(pivotScaleMatrix(glowPivot, effectiveScale).storage);
+          canvas.drawPath(outerHex, Paint()..color = badgeFill);
+          canvas.drawPath(
+            outerHex,
+            Paint()
+              ..color = spec.accentColor
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2.4,
+          );
+          canvas.restore();
+        }
         canvas.save();
         canvas.clipPath(path);
         canvas.transform(pivotScaleMatrix(glowPivot, effectiveScale).storage);
@@ -2154,7 +2820,6 @@ class _PolygonRibbonPainter extends CustomPainter {
         );
         canvas.restore();
       }
-
     }
   }
 
@@ -2195,5 +2860,3 @@ class _SlantedCapsuleClipper extends CustomClipper<Path> {
     return oldClipper.slant != slant;
   }
 }
-
-

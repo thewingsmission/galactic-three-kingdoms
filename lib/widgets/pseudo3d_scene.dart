@@ -13,10 +13,10 @@ import '../models/hex_cell_preview_style.dart';
 import '../models/level4_war_vfx.dart';
 import '../models/soldier_design.dart';
 import '../models/soldier_design_palette.dart';
+import '../models/soldier_rarity.dart';
 import '../models/soldier_faction_color_theme.dart';
 import 'hex_cell_preview_layout.dart';
 import 'hex_cell_styles_paint.dart';
-import 'multi_polygon_soldier_painter.dart';
 import 'soldier_design_catalog.dart';
 
 class Pseudo3DScene extends StatefulWidget {
@@ -28,6 +28,8 @@ class Pseudo3DScene extends StatefulWidget {
     this.maxViewportHeight = 540,
     this.viewportWidthFactor = 0.94,
     this.maxViewportWidth = 980,
+    this.spritesheetPivotX = _CenterSoldierSpritesheetMetrics.pivotX,
+    this.spritesheetPivotY = _CenterSoldierSpritesheetMetrics.pivotY,
   });
 
   final Pseudo3DMeshMode meshMode;
@@ -36,15 +38,30 @@ class Pseudo3DScene extends StatefulWidget {
   final double maxViewportHeight;
   final double viewportWidthFactor;
   final double maxViewportWidth;
+  final double spritesheetPivotX;
+  final double spritesheetPivotY;
 
   @override
   State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
 }
 
-enum Pseudo3DMeshMode {
-  solid,
-  outlineTransparent,
-  outlineHalfTransparent,
+enum Pseudo3DMeshMode { solid, outlineTransparent, outlineHalfTransparent }
+
+class _CenterSoldierSpritesheetMetrics {
+  _CenterSoldierSpritesheetMetrics._();
+
+  static const double scale = 1.31;
+  static const double pivotX = 0.53;
+  static const double pivotY = 0.79;
+  static const double animationSpeed = 1.89;
+  static const double shadowBaseSizeFactor = 0.39;
+  static const double shadowDiameterFactor = 1.05;
+
+  static double shadowCenterOffsetFromMarkerCenter(double markerBoxSize) {
+    final double shadowDiameter =
+        markerBoxSize * shadowBaseSizeFactor * shadowDiameterFactor;
+    return shadowDiameter / 6;
+  }
 }
 
 class _Pseudo3DSceneState extends State<Pseudo3DScene>
@@ -57,16 +74,20 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   static const double _minZoom = 0.7;
   static const double _maxZoom = 1.8;
   static const double _keyboardZoomStep = 0.08;
+  static const double _scoreHudTopInset = 10;
+  static const Duration _scorePanelRevealDelay = Duration(milliseconds: 500);
+  static const SoldierDesignPalette _playerFaction =
+      SoldierDesignPalette.yellow;
 
   late final Ticker _ticker;
   late final FocusNode _keyboardFocusNode;
+  late final _BoardAggregateScores _boardAggregateScores;
   Duration? _lastElapsed;
   Offset _movementVector = Offset.zero;
   Offset _boardOffset = Offset.zero;
   Size _viewportSize = Size.zero;
   Size _sceneSize = Size.zero;
   double _shadowAnchorWorldY = 0;
-  double _soldierMotionT = 0;
   double _effectT = 0;
   double _zoom = 1;
   double _gestureStartZoom = 1;
@@ -85,6 +106,8 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   final List<ui.Image> _redSlimeFrames = <ui.Image>[];
   bool _blueSlimeFramesLoadingStarted = false;
   final List<ui.Image> _blueSlimeFrames = <ui.Image>[];
+  bool _spritesheetFramesLoadingStarted = false;
+  final List<ui.Image> _spritesheetFrames = <ui.Image>[];
   bool _tigerLoseLoadingStarted = false;
   ui.Image? _tigerLoseImage;
   bool _tigerWinLoadingStarted = false;
@@ -97,10 +120,17 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   ui.Image? _dragonLoseImage;
   bool _dragonWinLoadingStarted = false;
   ui.Image? _dragonWinImage;
+  Offset? _trackedShadowCellLocalCenter;
+  Offset? _scorePanelCellLocalCenter;
+  double _trackedShadowCellEnteredAtSec = 0;
+  bool _showScorePanel = false;
 
   @override
   void initState() {
     super.initState();
+    _boardAggregateScores = _StrategicBoardScoring.buildAggregateScores(
+      _playerFaction,
+    );
     _keyboardFocusNode = FocusNode(debugLabel: 'Pseudo3DSceneKeyboardFocus');
     _ticker = createTicker(_tick)..start();
   }
@@ -163,6 +193,10 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
       _tigerLoseLoadingStarted = true;
       _loadTigerLose();
     }
+    if (!_spritesheetFramesLoadingStarted) {
+      _spritesheetFramesLoadingStarted = true;
+      _loadSpritesheetFrames();
+    }
     if (!_tigerWinLoadingStarted) {
       _tigerWinLoadingStarted = true;
       _loadTigerWin();
@@ -215,6 +249,40 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     }
     setState(() {
       target.addAll(loaded);
+    });
+  }
+
+  Future<void> _loadSpritesheetFrames() async {
+    final List<ui.Image> loaded = <ui.Image>[];
+    for (int i = 1; i <= 29; i++) {
+      final String assetPath =
+          'image/spritesheet/${i.toString().padLeft(2, '0')}.png';
+      try {
+        final ByteData data = await rootBundle.load(assetPath);
+        final ui.Codec codec = await ui.instantiateImageCodec(
+          data.buffer.asUint8List(),
+        );
+        final ui.FrameInfo frame = await codec.getNextFrame();
+        loaded.add(frame.image);
+      } catch (e, st) {
+        for (final ui.Image image in loaded) {
+          image.dispose();
+        }
+        if (kDebugMode) {
+          debugPrint('Pseudo3DScene: failed loading $assetPath: $e');
+          debugPrint('$st');
+        }
+        return;
+      }
+    }
+    if (!mounted) {
+      for (final ui.Image image in loaded) {
+        image.dispose();
+      }
+      return;
+    }
+    setState(() {
+      _spritesheetFrames.addAll(loaded);
     });
   }
 
@@ -359,12 +427,9 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   void _tick(Duration elapsed) {
     final double elapsedSeconds =
         elapsed.inMicroseconds / Duration.microsecondsPerSecond;
-    final double nextMotionT =
-        (elapsedSeconds / _soldierMotionCycleSeconds) % 1.0;
 
     if (_lastElapsed == null) {
       setState(() {
-        _soldierMotionT = nextMotionT;
         _effectT = elapsedSeconds;
       });
       _lastElapsed = elapsed;
@@ -372,11 +437,11 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     }
 
     final double dt =
-        (elapsed - _lastElapsed!).inMicroseconds / Duration.microsecondsPerSecond;
+        (elapsed - _lastElapsed!).inMicroseconds /
+        Duration.microsecondsPerSecond;
     _lastElapsed = elapsed;
 
     setState(() {
-      _soldierMotionT = nextMotionT;
       _effectT = elapsedSeconds;
 
       if (_movementVector != Offset.zero && mounted) {
@@ -396,7 +461,52 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
           _boardOffset = proposed;
         }
       }
+
+      _updateScorePanelTracking(elapsedSeconds);
     });
+  }
+
+  void _updateScorePanelTracking(double elapsedSeconds) {
+    final Offset? shadowCell = _currentShadowSteppedCellLocalCenter();
+    if (!_sameLocalCenter(shadowCell, _trackedShadowCellLocalCenter)) {
+      _trackedShadowCellLocalCenter = shadowCell;
+      _trackedShadowCellEnteredAtSec = elapsedSeconds;
+      _showScorePanel = false;
+      _scorePanelCellLocalCenter = null;
+    }
+
+    if (_movementVector != Offset.zero || shadowCell == null) {
+      _showScorePanel = false;
+      _scorePanelCellLocalCenter = null;
+      return;
+    }
+
+    final double revealDelaySeconds =
+        _scorePanelRevealDelay.inMilliseconds / Duration.millisecondsPerSecond;
+    if (elapsedSeconds - _trackedShadowCellEnteredAtSec >= revealDelaySeconds) {
+      _showScorePanel = true;
+      _scorePanelCellLocalCenter = shadowCell;
+    } else {
+      _showScorePanel = false;
+      _scorePanelCellLocalCenter = null;
+    }
+  }
+
+  Offset? _currentShadowSteppedCellLocalCenter() {
+    if (_viewportSize == Size.zero) {
+      return null;
+    }
+    return _Pseudo3DBoardPainter._localCenterUnderShadow(
+      _boardOffset,
+      _shadowAnchorWorldY,
+    );
+  }
+
+  bool _sameLocalCenter(Offset? a, Offset? b) {
+    if (a == null || b == null) {
+      return a == b;
+    }
+    return (a - b).distanceSquared < 1.0;
   }
 
   void _beginTouchHoldMovement(Offset localPosition, Size size) {
@@ -468,11 +578,12 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
         final double shadowCenterScreenY =
             totalScreenHeight / 2 +
             totalScreenHeight * _soldierAnchorScreenYOffsetFactor +
-            _ProductionJollyCircleMarker.shadowCenterOffsetFromMarkerCenter(
+            _CenterSoldierSpritesheetMetrics.shadowCenterOffsetFromMarkerCenter(
                   _markerBoxSize,
                 ) *
                 _zoom;
-        final double viewportTop = (_latestBoardLayoutHeight - _viewportSize.height) / 2;
+        final double viewportTop =
+            (_latestBoardLayoutHeight - _viewportSize.height) / 2;
         final double shadowCenterViewportY = shadowCenterScreenY - viewportTop;
         _shadowAnchorWorldY = _Pseudo3DBoardPainter.anchorWorldYForViewport(
           _viewportSize,
@@ -533,10 +644,285 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
       size.width / 2,
       totalScreenHeight / 2 +
           totalScreenHeight * _soldierAnchorScreenYOffsetFactor +
-          _ProductionJollyCircleMarker.shadowCenterOffsetFromMarkerCenter(
+          _CenterSoldierSpritesheetMetrics.shadowCenterOffsetFromMarkerCenter(
                 _markerBoxSize,
               ) *
               _zoom,
+    );
+  }
+
+  List<_HudScorePanelModel> _buildHudPanels() {
+    final Offset? localCenter = _scorePanelCellLocalCenter;
+    if (localCenter == null) {
+      return const <_HudScorePanelModel>[];
+    }
+    return <_HudScorePanelModel>[
+      _buildCountryScorePanel(),
+      _buildCellScorePanel(localCenter),
+      _buildPersonalProfilePanel(),
+      _buildPersonalArmyPanel(),
+    ];
+  }
+
+  _HudScorePanelModel _buildCountryScorePanel() {
+    final Map<SoldierDesignPalette, int> scores =
+        _boardAggregateScores.countryCellCounts;
+    final Map<SoldierDesignPalette, int> deltas = _buildCountryTrendMap(scores);
+    final List<SoldierDesignPalette> order = _sortedFactionsByScores(scores);
+    final List<_HudScoreRowModel> rows = order
+        .map(
+          (SoldierDesignPalette faction) => _HudScoreRowModel(
+            faction: faction,
+            label: _factionName(faction),
+            value: scores[faction] ?? 0,
+            delta: deltas[faction] ?? 0,
+            emphasis: faction == order.first,
+          ),
+        )
+        .toList();
+    return _HudScorePanelModel(
+      kind: _HudPanelKind.kingdom,
+      title: 'Kingdom Dominion',
+      subtitle: 'Three Kingdoms score surge',
+      themeFaction: order.first,
+      rows: rows,
+      panelIcon: _HudPanelIconData(
+        assetPath: _joystickKnobAssetPath(order.first),
+        imageScale: _joystickKnobImageScale(order.first),
+        imageOffset: _joystickKnobImageOffset(order.first),
+      ),
+    );
+  }
+
+  _HudScorePanelModel _buildCellScorePanel(Offset localCenter) {
+    final ({double red, double yellow, double blue}) influence =
+        _StrategicBoardScoring.territoryInfluenceScores(localCenter);
+    final Map<SoldierDesignPalette, int> cellScores =
+        <SoldierDesignPalette, int>{
+          SoldierDesignPalette.red: _StrategicBoardScoring.influencePoints(
+            influence.red,
+          ),
+          SoldierDesignPalette.yellow: _StrategicBoardScoring.influencePoints(
+            influence.yellow,
+          ),
+          SoldierDesignPalette.blue: _StrategicBoardScoring.influencePoints(
+            influence.blue,
+          ),
+        };
+    final SoldierDesignPalette owner = _StrategicBoardScoring.territoryFaction(
+      localCenter,
+    );
+    final Map<SoldierDesignPalette, int> deltas = _buildCellTrendMap(
+      localCenter,
+      cellScores,
+    );
+    final List<SoldierDesignPalette> order = _sortedFactionsByScores(
+      cellScores,
+    );
+    final List<_HudScoreRowModel> rows = order
+        .map(
+          (SoldierDesignPalette faction) => _HudScoreRowModel(
+            faction: faction,
+            label: _factionName(faction),
+            value: cellScores[faction] ?? 0,
+            delta: deltas[faction] ?? 0,
+            emphasis: faction == owner,
+          ),
+        )
+        .toList();
+    return _HudScorePanelModel(
+      kind: _HudPanelKind.land,
+      title: 'Land Claim',
+      subtitle: 'Owner: ${_factionName(owner)}',
+      themeFaction: owner,
+      rows: rows,
+      panelIcon: _HudPanelIconData(
+        assetPath: _joystickKnobAssetPath(owner),
+        imageScale: _joystickKnobImageScale(owner),
+        imageOffset: _joystickKnobImageOffset(owner),
+      ),
+    );
+  }
+
+  _HudScorePanelModel _buildPersonalProfilePanel() {
+    return _HudScorePanelModel(
+      kind: _HudPanelKind.heroProfile,
+      title: 'Warlord Record',
+      subtitle: 'Your kingdom champion',
+      themeFaction: _playerFaction,
+      rows: const <_HudScoreRowModel>[],
+      heroStats: _HudHeroStats(
+        level: _boardAggregateScores.personalLevel,
+        currentExp: _boardAggregateScores.currentExp,
+        expToNextLevel: _boardAggregateScores.expToNextLevel,
+        distinctSoldiers: _boardAggregateScores.distinctSoldierCount,
+        moneyCollected: _boardAggregateScores.moneyCollected,
+        rarityCounts: _boardAggregateScores.rarityCounts,
+        joystickAssetPath: _joystickKnobAssetPath(_playerFaction),
+        joystickImageScale: _joystickKnobImageScale(_playerFaction),
+        joystickImageOffset: _joystickKnobImageOffset(_playerFaction),
+      ),
+    );
+  }
+
+  _HudScorePanelModel _buildPersonalArmyPanel() {
+    final Map<SoldierDesignPalette, int> enemyKills =
+        _boardAggregateScores.enemyKillsByFaction;
+    final List<SoldierDesignPalette> enemyOrder =
+        SoldierDesignPalette.values
+            .where((SoldierDesignPalette faction) => faction != _playerFaction)
+            .toList()
+          ..sort((SoldierDesignPalette a, SoldierDesignPalette b) {
+            final int byScore = (enemyKills[b] ?? 0).compareTo(
+              enemyKills[a] ?? 0,
+            );
+            if (byScore != 0) {
+              return byScore;
+            }
+            return _factionName(a).compareTo(_factionName(b));
+          });
+    final List<_HudScoreRowModel> rows = <_HudScoreRowModel>[
+      _HudScoreRowModel(
+        faction: _playerFaction,
+        label: '${_factionName(_playerFaction)} money',
+        value: _boardAggregateScores.moneyCollected,
+        emphasis: true,
+        valuePrefix: '\$',
+      ),
+      ...enemyOrder.map(
+        (SoldierDesignPalette faction) => _HudScoreRowModel(
+          faction: faction,
+          label: '${_factionName(faction)} KOs',
+          value: enemyKills[faction] ?? 0,
+        ),
+      ),
+    ];
+    return _HudScorePanelModel(
+      kind: _HudPanelKind.heroArmy,
+      title: 'Warband Ledger',
+      subtitle: 'Roster and enemy tally',
+      themeFaction: _playerFaction,
+      rows: rows,
+      heroStats: _HudHeroStats(
+        level: _boardAggregateScores.personalLevel,
+        currentExp: _boardAggregateScores.currentExp,
+        expToNextLevel: _boardAggregateScores.expToNextLevel,
+        distinctSoldiers: _boardAggregateScores.distinctSoldierCount,
+        moneyCollected: _boardAggregateScores.moneyCollected,
+        rarityCounts: _boardAggregateScores.rarityCounts,
+        joystickAssetPath: _joystickKnobAssetPath(_playerFaction),
+        joystickImageScale: _joystickKnobImageScale(_playerFaction),
+        joystickImageOffset: _joystickKnobImageOffset(_playerFaction),
+      ),
+    );
+  }
+
+  Map<SoldierDesignPalette, int> _buildCountryTrendMap(
+    Map<SoldierDesignPalette, int> scores,
+  ) {
+    return <SoldierDesignPalette, int>{
+      for (final SoldierDesignPalette faction in SoldierDesignPalette.values)
+        faction: math.max(
+          1,
+          math.min(
+            scores[faction] ?? 0,
+            12 + ((scores[faction] ?? 0) * 0.24).round() + faction.index * 3,
+          ),
+        ),
+    };
+  }
+
+  Map<SoldierDesignPalette, int> _buildCellTrendMap(
+    Offset localCenter,
+    Map<SoldierDesignPalette, int> scores,
+  ) {
+    final int q = (localCenter.dx / (_Pseudo3DBoardPainter._baseRadius * 1.5))
+        .round();
+    final int r =
+        ((localCenter.dy / (_Pseudo3DBoardPainter._baseRadius * math.sqrt(3))) -
+                q / 2)
+            .round();
+    return <SoldierDesignPalette, int>{
+      for (final SoldierDesignPalette faction in SoldierDesignPalette.values)
+        faction: math.max(
+          1,
+          math.min(
+            scores[faction] ?? 0,
+            4 + (((q + 31) * (r + 17) * (faction.index + 2)).abs() % 13),
+          ),
+        ),
+    };
+  }
+
+  List<SoldierDesignPalette> _sortedFactionsByScores(
+    Map<SoldierDesignPalette, int> scores,
+  ) {
+    final List<SoldierDesignPalette> ordered = SoldierDesignPalette.values
+        .toList();
+    ordered.sort((SoldierDesignPalette a, SoldierDesignPalette b) {
+      final int byScore = (scores[b] ?? 0).compareTo(scores[a] ?? 0);
+      if (byScore != 0) {
+        return byScore;
+      }
+      return _factionName(a).compareTo(_factionName(b));
+    });
+    return ordered;
+  }
+
+  String _factionName(SoldierDesignPalette faction) => switch (faction) {
+    SoldierDesignPalette.red => 'Red',
+    SoldierDesignPalette.yellow => 'Yellow',
+    SoldierDesignPalette.blue => 'Blue',
+  };
+
+  String _joystickKnobAssetPath(SoldierDesignPalette faction) =>
+      switch (faction) {
+        SoldierDesignPalette.red => 'image/red_eagle.png',
+        SoldierDesignPalette.yellow => 'image/yellow_tiger.png',
+        SoldierDesignPalette.blue => 'image/blue_dragon.png',
+      };
+
+  double _joystickKnobImageScale(SoldierDesignPalette faction) =>
+      switch (faction) {
+        SoldierDesignPalette.red => 1.2,
+        SoldierDesignPalette.yellow => 1.0,
+        SoldierDesignPalette.blue => 1.1,
+      };
+
+  Offset _joystickKnobImageOffset(SoldierDesignPalette faction) =>
+      switch (faction) {
+        SoldierDesignPalette.red => const Offset(0, 4.48),
+        SoldierDesignPalette.yellow => Offset.zero,
+        SoldierDesignPalette.blue => const Offset(0, 2.8),
+      };
+
+  Widget _buildScoreHud() {
+    final List<_HudScorePanelModel> panels = _buildHudPanels();
+    return IgnorePointer(
+      child: AnimatedSlide(
+        duration: const Duration(milliseconds: 220),
+        offset: _showScorePanel ? Offset.zero : const Offset(0, -0.08),
+        curve: Curves.easeOutCubic,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 220),
+          opacity: _showScorePanel ? 1 : 0,
+          curve: Curves.easeOutCubic,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, _scoreHudTopInset, 12, 0),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  for (int i = 0; i < panels.length; i++) ...<Widget>[
+                    Expanded(child: _HudScorePanelCard(model: panels[i])),
+                    if (i != panels.length - 1) const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -554,6 +940,9 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
       image.dispose();
     }
     for (final ui.Image image in _blueSlimeFrames) {
+      image.dispose();
+    }
+    for (final ui.Image image in _spritesheetFrames) {
       image.dispose();
     }
     _tigerLoseImage?.dispose();
@@ -595,12 +984,23 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
           final double shadowCenterScreenY =
               totalScreenHeight / 2 +
               totalScreenHeight * _soldierAnchorScreenYOffsetFactor +
-              _ProductionJollyCircleMarker.shadowCenterOffsetFromMarkerCenter(
+              _CenterSoldierSpritesheetMetrics.shadowCenterOffsetFromMarkerCenter(
                     _markerBoxSize,
                   ) *
                   _zoom;
           final double viewportTop = (boardLayoutHeight - viewportHeight) / 2;
-          final double shadowCenterViewportY = shadowCenterScreenY - viewportTop;
+          final double shadowCenterViewportY =
+              shadowCenterScreenY - viewportTop;
+          final double spritesheetFrameProgress =
+              ((_effectT * _CenterSoldierSpritesheetMetrics.animationSpeed) /
+                  _soldierMotionCycleSeconds) %
+              1.0;
+          final ui.Image? spritesheetFrame = _spritesheetFrames.isEmpty
+              ? null
+              : _spritesheetFrames[(spritesheetFrameProgress *
+                            _spritesheetFrames.length)
+                        .floor() %
+                    _spritesheetFrames.length];
 
           _shadowAnchorWorldY = _Pseudo3DBoardPainter.anchorWorldYForViewport(
             _viewportSize,
@@ -610,22 +1010,27 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
           );
           final Offset initialOffset =
               _Pseudo3DBoardPainter.initialOffsetForViewport(
-            _viewportSize,
-            targetScreenY: shadowCenterViewportY,
-            hexGap: 0,
-            zoom: _zoom,
-          );
+                _viewportSize,
+                targetScreenY: shadowCenterViewportY,
+                hexGap: 0,
+                zoom: _zoom,
+              );
           if (!_didInitializeBoardOffset) {
             _didInitializeBoardOffset = true;
             _boardOffset = initialOffset;
           }
-          final Offset clampedOffset = _Pseudo3DBoardPainter.clampOffsetForLocalAnchor(
-            currentOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
-            proposedOffset: _didInitializeBoardOffset ? _boardOffset : initialOffset,
-            anchorWorldY: _shadowAnchorWorldY,
-            hexGap: 0,
-            zoom: _zoom,
-          );
+          final Offset clampedOffset =
+              _Pseudo3DBoardPainter.clampOffsetForLocalAnchor(
+                currentOffset: _didInitializeBoardOffset
+                    ? _boardOffset
+                    : initialOffset,
+                proposedOffset: _didInitializeBoardOffset
+                    ? _boardOffset
+                    : initialOffset,
+                anchorWorldY: _shadowAnchorWorldY,
+                hexGap: 0,
+                zoom: _zoom,
+              );
           _boardOffset = clampedOffset;
 
           final Widget sceneStack = Stack(
@@ -670,7 +1075,8 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                     child: Transform.translate(
                       offset: Offset(
                         0,
-                        constraints.maxHeight * _soldierAnchorScreenYOffsetFactor,
+                        constraints.maxHeight *
+                            _soldierAnchorScreenYOffsetFactor,
                       ),
                       child: Transform.scale(
                         scale: _zoom,
@@ -678,7 +1084,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         child: SizedBox(
                           width: _markerBoxSize,
                           height: _markerBoxSize,
-                          child: const _ProductionJollyCircleShadow(),
+                          child: const _CenterSoldierShadow(),
                         ),
                       ),
                     ),
@@ -759,7 +1165,8 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                     child: Transform.translate(
                       offset: Offset(
                         0,
-                        constraints.maxHeight * _soldierAnchorScreenYOffsetFactor,
+                        constraints.maxHeight *
+                            _soldierAnchorScreenYOffsetFactor,
                       ),
                       child: Transform.scale(
                         scale: _zoom,
@@ -767,15 +1174,20 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         child: SizedBox(
                           width: _markerBoxSize,
                           height: _markerBoxSize,
-                          child: _ProductionJollyCircleBody(
-                            motionT: _soldierMotionT,
-                          ),
+                          child: spritesheetFrame == null
+                              ? const SizedBox.shrink()
+                              : _CenterSoldierSpritesheetBody(
+                                  frame: spritesheetFrame,
+                                  pivotXFactor: widget.spritesheetPivotX,
+                                  pivotYFactor: widget.spritesheetPivotY,
+                                ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
+              Positioned(left: 0, right: 0, top: 0, child: _buildScoreHud()),
             ],
           );
 
@@ -810,85 +1222,19 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   }
 }
 
-class _ProductionJollyCircleMarker {
-  _ProductionJollyCircleMarker._();
-
-  static final SoldierDesign _design = kProductionSoldierDesignCatalog[5];
-  static const double _anchorMotionT = 0.25;
-  static final _RoleBottomMetrics _contactBottom = _bottomMetricsForRole(
-    SoldierPartStackRole.contact,
-  );
-  static final _RoleBottomMetrics _targetBottom = _bottomMetricsForRole(
-    SoldierPartStackRole.target,
-  );
-
-  static double shadowCenterOffsetFromMarkerCenter(double markerBoxSize) {
-    final double size = markerBoxSize * 0.39;
-    final double scale = size / _design.paintSize;
-    final double targetBottomDeltaY =
-        (_targetBottom.point.dy - _contactBottom.point.dy) * scale;
-    final double shadowDiameter = size * 1.05;
-    return targetBottomDeltaY + shadowDiameter / 6;
-  }
-
-  static _RoleBottomMetrics _bottomMetricsForRole(SoldierPartStackRole role) {
-    final List<Offset> points = <Offset>[];
-    for (final SoldierShapePart part in _design.parts) {
-      if (part.stackRole != role) continue;
-      final List<Offset>? fill = MultiPolygonSoldierPainter.transformedFillVertices(
-        part,
-        _anchorMotionT,
-        null,
-      );
-      if (fill != null) {
-        points.addAll(fill);
-      }
-    }
-
-    if (points.isEmpty) {
-      return const _RoleBottomMetrics(point: Offset.zero);
-    }
-
-    double minX = points.first.dx;
-    double maxX = points.first.dx;
-    double maxY = points.first.dy;
-    for (final Offset p in points) {
-      if (p.dx < minX) minX = p.dx;
-      if (p.dx > maxX) maxX = p.dx;
-      if (p.dy > maxY) maxY = p.dy;
-    }
-
-    return _RoleBottomMetrics(
-      point: Offset((minX + maxX) / 2, maxY),
-    );
-  }
-}
-
-class _ProductionJollyCircleShadow extends StatelessWidget {
-  const _ProductionJollyCircleShadow();
+class _CenterSoldierShadow extends StatelessWidget {
+  const _CenterSoldierShadow();
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final double size = math.min(constraints.maxWidth, constraints.maxHeight) * 0.39;
-        final double scale = size / _ProductionJollyCircleMarker._design.paintSize;
-        final Offset contactBottomScreen = Offset(size / 2, size / 2);
-        final Offset targetBottomScreen = Offset(
-          contactBottomScreen.dx +
-              (_ProductionJollyCircleMarker._targetBottom.point.dx -
-                      _ProductionJollyCircleMarker._contactBottom.point.dx) *
-                  scale,
-          contactBottomScreen.dy +
-              (_ProductionJollyCircleMarker._targetBottom.point.dy -
-                      _ProductionJollyCircleMarker._contactBottom.point.dy) *
-                  scale,
-        );
-        final double shadowDiameter = size * 1.05;
-        final Offset shadowOffsetFromCenter = Offset(
-          0,
-          targetBottomScreen.dy + shadowDiameter / 6 - size / 2,
-        );
+        final double size =
+            math.min(constraints.maxWidth, constraints.maxHeight) *
+            _CenterSoldierSpritesheetMetrics.shadowBaseSizeFactor;
+        final double shadowDiameter =
+            size * _CenterSoldierSpritesheetMetrics.shadowDiameterFactor;
+        final Offset shadowOffsetFromCenter = Offset(0, shadowDiameter / 6);
 
         return Stack(
           alignment: Alignment.center,
@@ -916,51 +1262,60 @@ class _ProductionJollyCircleShadow extends StatelessWidget {
   }
 }
 
-class _ProductionJollyCircleBody extends StatelessWidget {
-  const _ProductionJollyCircleBody({
-    required this.motionT,
+class _CenterSoldierSpritesheetBody extends StatelessWidget {
+  const _CenterSoldierSpritesheetBody({
+    required this.frame,
+    required this.pivotXFactor,
+    required this.pivotYFactor,
   });
-  final double motionT;
+
+  final ui.Image frame;
+  final double pivotXFactor;
+  final double pivotYFactor;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final double size = math.min(constraints.maxWidth, constraints.maxHeight) * 0.39;
-        return SizedBox(
-          width: size,
-          height: size,
-          child: CustomPaint(
-            painter: MultiPolygonSoldierPainter(
-              parts: _ProductionJollyCircleMarker._design.parts,
-              displayPalette: SoldierDesignPalette.yellow,
-              strokeWidth: _ProductionJollyCircleMarker._design.strokeWidth,
-              motionT: motionT,
-              uniformWorldScale: size / _ProductionJollyCircleMarker._design.paintSize,
-              fixedModelAnchor: _ProductionJollyCircleMarker._contactBottom.point,
+        final double markerSize = math.min(
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+        final double frameWidth = frame.width.toDouble();
+        final double frameHeight = frame.height.toDouble();
+        final double renderedWidth =
+            markerSize * _CenterSoldierSpritesheetMetrics.scale;
+        final double renderedHeight =
+            renderedWidth * frameHeight / math.max(frameWidth, 1);
+        final double pivotX = renderedWidth * pivotXFactor;
+        final double pivotY = renderedHeight * pivotYFactor;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Positioned(
+              left: markerSize / 2 - pivotX,
+              top: markerSize / 2 - pivotY,
+              width: renderedWidth,
+              height: renderedHeight,
+              child: IgnorePointer(
+                child: RawImage(
+                  image: frame,
+                  fit: BoxFit.fill,
+                  filterQuality: FilterQuality.high,
+                ),
+              ),
             ),
-          ),
+          ],
         );
       },
     );
   }
 }
 
-class _RoleBottomMetrics {
-  const _RoleBottomMetrics({
-    required this.point,
-  });
-
-  final Offset point;
-}
-
 /// Hex fills vs shadow rim vs war VFX composite in separate layers: mesh first,
 /// then shadow footprint (above all cells), then slime/tornado/mascot overlays.
-enum _BoardPaintLayer {
-  hexMesh,
-  shadowHighlight,
-  warEffects,
-}
+enum _BoardPaintLayer { hexMesh, shadowHighlight, warEffects }
 
 class _Pseudo3DBoardPainter extends CustomPainter {
   _Pseudo3DBoardPainter({
@@ -988,6 +1343,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   final Pseudo3DMeshMode meshMode;
   final double zoom;
   final double effectT;
+
   /// World Y solved so the soldier shadow sits on the map; used to find the stepped-on hex.
   final double shadowAnchorWorldY;
   final List<ui.Image> yellowSlimeFrames;
@@ -1023,13 +1379,15 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     double activeDuration,
   ) {
     if (tInActive < _level4ScaleInDurationSec) {
-      final double u =
-          (tInActive / _level4ScaleInDurationSec).clamp(0.0, 1.0);
+      final double u = (tInActive / _level4ScaleInDurationSec).clamp(0.0, 1.0);
       return Curves.easeOut.transform(u);
     }
     if (tInActive > activeDuration - _level4ScaleOutDurationSec) {
-      final double u = ((activeDuration - tInActive) / _level4ScaleOutDurationSec)
-          .clamp(0.0, 1.0);
+      final double u =
+          ((activeDuration - tInActive) / _level4ScaleOutDurationSec).clamp(
+            0.0,
+            1.0,
+          );
       return Curves.easeIn.transform(u);
     }
     return 1.0;
@@ -1051,6 +1409,9 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   static const double _focalLength = 420;
   static const double _nearClipZ = 120;
   static const double _hexHalfHeight = _baseRadius * 0.8660254;
+  static const double _hexMeshCullMargin = 56;
+  static const double _shadowHighlightCullMargin = 72;
+  static const double _warEffectsCullMargin = 180;
   static final double landExtentY =
       math.sqrt(3) * _baseRadius * (_landSideHexes - 0.5);
 
@@ -1080,13 +1441,72 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     Offset boardOffset,
     double shadowAnchorWorldY,
   ) {
-    final Offset anchorLocal =
-        Offset(-boardOffset.dx, shadowAnchorWorldY - boardOffset.dy);
+    final Offset anchorLocal = Offset(
+      -boardOffset.dx,
+      shadowAnchorWorldY - boardOffset.dy,
+    );
     final double fq = anchorLocal.dx / (_baseRadius * 1.5);
-    final double fr =
-        anchorLocal.dy / (_baseRadius * math.sqrt(3)) - fq / 2;
+    final double fr = anchorLocal.dy / (_baseRadius * math.sqrt(3)) - fq / 2;
     final _HexAxial axial = _axialRoundFractional(fq, fr);
     return _baseLandCentersByAxial[axial];
+  }
+
+  Rect _expandedViewportCullRect(Size size) {
+    final double margin = switch (paintLayer) {
+      _BoardPaintLayer.hexMesh => _hexMeshCullMargin,
+      _BoardPaintLayer.shadowHighlight => _shadowHighlightCullMargin,
+      _BoardPaintLayer.warEffects => _warEffectsCullMargin,
+    };
+    return Rect.fromLTWH(0, 0, size.width, size.height).inflate(margin);
+  }
+
+  static Rect _roughProjectedHexBoundsStatic(
+    Offset worldCenter,
+    Size size, {
+    required double zoom,
+  }) {
+    final List<Offset> samplePoints = <Offset>[
+      _projectPointStatic(
+        worldCenter.dx,
+        worldCenter.dy,
+        size,
+        zoom: zoom,
+      ).screen,
+      for (final Offset local in _hexLocalVertices)
+        _projectPointStatic(
+          worldCenter.dx + local.dx,
+          worldCenter.dy + local.dy,
+          size,
+          zoom: zoom,
+        ).screen,
+    ];
+    double minX = samplePoints.first.dx;
+    double maxX = minX;
+    double minY = samplePoints.first.dy;
+    double maxY = minY;
+    for (final Offset point in samplePoints.skip(1)) {
+      minX = math.min(minX, point.dx);
+      maxX = math.max(maxX, point.dx);
+      minY = math.min(minY, point.dy);
+      maxY = math.max(maxY, point.dy);
+    }
+    return Rect.fromLTRB(minX, minY, maxX, maxY).inflate(18);
+  }
+
+  Rect _roughProjectedHexBounds(Offset worldCenter, Size size) {
+    return _roughProjectedHexBoundsStatic(worldCenter, size, zoom: zoom);
+  }
+
+  Rect _finalProjectedCullBounds(_ProjectedHexPolygon polygon) {
+    final double extra = switch (paintLayer) {
+      _BoardPaintLayer.hexMesh => math.max(20.0, polygon.strokeScale * 18.0),
+      _BoardPaintLayer.shadowHighlight => math.max(
+        40.0,
+        polygon.strokeScale * 28.0,
+      ),
+      _BoardPaintLayer.warEffects => math.max(96.0, polygon.outerRadius * 0.9),
+    };
+    return polygon.path.getBounds().inflate(extra);
   }
 
   /// Electric buzz on the hex outline + rim glow (shadow footprint). Uses [effectT] for motion.
@@ -1141,11 +1561,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
           ..strokeWidth = math.max(0.45, 0.72 * s)
           ..color = c.sparkCore.withValues(alpha: 0.72 + 0.26 * crackle.abs())
           ..strokeCap = StrokeCap.round;
-        canvas.drawLine(
-          p,
-          p + norm * (buzz * amp * 0.55),
-          sparkCore,
-        );
+        canvas.drawLine(p, p + norm * (buzz * amp * 0.55), sparkCore);
 
         if (prev != null && i > 0) {
           final double midBuzz = math.sin(buzzT * 31 + dist * 0.14);
@@ -1197,7 +1613,9 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   ) {
     final c = faction.shadowFootprintElectricColors;
     final double s = math.max(0.85, strokeScale);
-    final double w = HexCellPreviewLayout.unifiedOutlineStrokeWidth(strokeScale);
+    final double w = HexCellPreviewLayout.unifiedOutlineStrokeWidth(
+      strokeScale,
+    );
 
     final Paint outerBloom = Paint()
       ..style = PaintingStyle.stroke
@@ -1224,11 +1642,10 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = math.max(0.6, w * 0.55)
       ..color = Color.lerp(
-            const Color(0xFFFFFFFF),
-            c.chromeSpecularTint,
-            0.35 + 0.25 * shimmer,
-          )!
-          .withValues(alpha: 0.85 + 0.12 * shimmer);
+        const Color(0xFFFFFFFF),
+        c.chromeSpecularTint,
+        0.35 + 0.25 * shimmer,
+      )!.withValues(alpha: 0.85 + 0.12 * shimmer);
     canvas.drawPath(outlinePath, specular);
   }
 
@@ -1236,13 +1653,61 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final Offset worldOrigin = Offset(boardOffset.dx, boardOffset.dy);
     final List<_ProjectedHexPolygon> projected = <_ProjectedHexPolygon>[];
-    final Offset? shadowHighlightLocal =
-        _localCenterUnderShadow(boardOffset, shadowAnchorWorldY);
+    final Offset? shadowHighlightLocal = _localCenterUnderShadow(
+      boardOffset,
+      shadowAnchorWorldY,
+    );
+    final Rect cullRect = _expandedViewportCullRect(size);
+
+    if (paintLayer == _BoardPaintLayer.shadowHighlight) {
+      if (shadowHighlightLocal == null) {
+        return;
+      }
+      final Offset worldCenter = shadowHighlightLocal + worldOrigin;
+      if (!_roughProjectedHexBounds(worldCenter, size).overlaps(cullRect)) {
+        return;
+      }
+      final _ProjectedHexPolygon? shadowPolygon = _projectHex(
+        worldCenter,
+        size,
+      );
+      if (shadowPolygon == null ||
+          !_finalProjectedCullBounds(shadowPolygon).overlaps(cullRect)) {
+        return;
+      }
+      final SoldierDesignPalette glowFaction = _territoryFaction(
+        shadowHighlightLocal,
+      );
+      _paintShadowFootprintGlow(
+        canvas,
+        shadowPolygon.path,
+        shadowPolygon.strokeScale,
+        glowFaction,
+      );
+      HexCellPreviewLayout.paintUnifiedHexOutline(
+        canvas,
+        shadowPolygon.path,
+        shadowPolygon.strokeScale,
+      );
+      _paintShadowChromeOutline(
+        canvas,
+        shadowPolygon.path,
+        shadowPolygon.strokeScale,
+        glowFaction,
+      );
+      return;
+    }
 
     for (final Offset localCenter in _baseLandTileCenters) {
       final Offset worldCenter = localCenter + worldOrigin;
+      if (!_roughProjectedHexBounds(worldCenter, size).overlaps(cullRect)) {
+        continue;
+      }
       final _ProjectedHexPolygon? polygon = _projectHex(worldCenter, size);
       if (polygon == null) continue;
+      if (!_finalProjectedCullBounds(polygon).overlaps(cullRect)) {
+        continue;
+      }
       final int level = _strengthLevel(localCenter);
       final SoldierDesignPalette faction = _territoryFaction(localCenter);
       projected.add(
@@ -1263,28 +1728,35 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     );
 
     for (final _ProjectedHexPolygon polygon in projected) {
-      final bool isShadowStepCell = shadowHighlightLocal != null &&
+      final bool isShadowStepCell =
+          shadowHighlightLocal != null &&
           polygon.localCenter != null &&
           (polygon.localCenter! - shadowHighlightLocal).distanceSquared < 1.0;
 
       if (paintLayer == _BoardPaintLayer.hexMesh) {
-        final HexCellPreviewStyle cellStyle =
-            hexCellStyleForStrengthLevel(polygon.level);
+        final HexCellPreviewStyle cellStyle = hexCellStyleForStrengthLevel(
+          polygon.level,
+        );
         final Path innerPath = _buildScaledInnerPath(
           polygon.path,
           polygon.center,
           _fixedInnerScale,
         );
         final Path fillPath = switch (meshMode) {
-          Pseudo3DMeshMode.outlineTransparent =>
-            Path.combine(PathOperation.difference, polygon.path, innerPath),
-          Pseudo3DMeshMode.outlineHalfTransparent =>
-            Path.combine(PathOperation.difference, polygon.path, innerPath),
+          Pseudo3DMeshMode.outlineTransparent => Path.combine(
+            PathOperation.difference,
+            polygon.path,
+            innerPath,
+          ),
+          Pseudo3DMeshMode.outlineHalfTransparent => Path.combine(
+            PathOperation.difference,
+            polygon.path,
+            innerPath,
+          ),
           _ => polygon.path,
         };
 
-        if (cellStyle.usesVariantPaint &&
-            meshMode != Pseudo3DMeshMode.solid) {
+        if (cellStyle.usesVariantPaint && meshMode != Pseudo3DMeshMode.solid) {
           final SoldierDesignPalette faction =
               polygon.faction ?? SoldierDesignPalette.red;
           final CellCorePalette palette = CellCorePalette.fromTerritoryField(
@@ -1320,15 +1792,9 @@ class _Pseudo3DBoardPainter extends CustomPainter {
           if (cellStyle == HexCellPreviewStyle.l1) {
             fillColor = pal.componentIndex1;
           }
-          canvas.drawPath(
-            fillPath,
-            Paint()..color = fillColor,
-          );
+          canvas.drawPath(fillPath, Paint()..color = fillColor);
           if (meshMode == Pseudo3DMeshMode.outlineHalfTransparent) {
-            canvas.drawPath(
-              innerPath,
-              Paint()..color = pal.innerHexHolePaint,
-            );
+            canvas.drawPath(innerPath, Paint()..color = pal.innerHexHolePaint);
           }
           if (!isShadowStepCell) {
             HexCellPreviewLayout.paintUnifiedHexOutline(
@@ -1337,28 +1803,6 @@ class _Pseudo3DBoardPainter extends CustomPainter {
               polygon.strokeScale,
             );
           }
-        }
-      } else if (paintLayer == _BoardPaintLayer.shadowHighlight) {
-        if (isShadowStepCell) {
-          final SoldierDesignPalette glowFaction =
-              polygon.faction ?? SoldierDesignPalette.red;
-          _paintShadowFootprintGlow(
-            canvas,
-            polygon.path,
-            polygon.strokeScale,
-            glowFaction,
-          );
-          HexCellPreviewLayout.paintUnifiedHexOutline(
-            canvas,
-            polygon.path,
-            polygon.strokeScale,
-          );
-          _paintShadowChromeOutline(
-            canvas,
-            polygon.path,
-            polygon.strokeScale,
-            glowFaction,
-          );
         }
       } else if (paintLayer == _BoardPaintLayer.warEffects &&
           polygon.isWarCell &&
@@ -1374,8 +1818,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       return;
     }
     final int q = (local.dx / (_baseRadius * 1.5)).round();
-    final int r =
-        ((local.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
+    final int r = ((local.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
     final Level4UnitDesign design = warAnimationDesignForCell(q, r);
     late final List<ui.Image> frames;
     late final ui.Image? mascot;
@@ -1410,23 +1853,24 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     if (frames.isEmpty) {
       return;
     }
-    final double activeDuration =
-        _level4SyncedSteps * _level4FrameDurationSec;
+    final double activeDuration = _level4SyncedSteps * _level4FrameDurationSec;
     final double cycleDuration = activeDuration + _level4PauseSec;
     final double tInCycle = effectT % cycleDuration;
     if (tInCycle >= activeDuration) {
       return;
     }
-    final double visibilityScale =
-        _level4VisibilityScale(tInCycle, activeDuration);
+    final double visibilityScale = _level4VisibilityScale(
+      tInCycle,
+      activeDuration,
+    );
     if (visibilityScale < 1e-5) {
       return;
     }
-    final int step =
-        (tInCycle / _level4FrameDurationSec).floor().clamp(0, _level4SyncedSteps - 1);
-    final int frameIndex = _isWinBattleEffect(design)
-        ? step % 6
-        : step % 9;
+    final int step = (tInCycle / _level4FrameDurationSec).floor().clamp(
+      0,
+      _level4SyncedSteps - 1,
+    );
+    final int frameIndex = _isWinBattleEffect(design) ? step % 6 : step % 9;
     final ui.Image frame = frames[frameIndex];
     final Rect bounds = polygon.path.getBounds();
     final double imageAspect = frame.width / frame.height;
@@ -1473,10 +1917,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       }
       overlayWidth *= tune.mascotScale;
       overlayHeight *= tune.mascotScale;
-      final double left =
-          pivotTarget.dx - tune.mascotPivotX * overlayWidth;
-      final double top =
-          pivotTarget.dy - tune.mascotPivotY * overlayHeight;
+      final double left = pivotTarget.dx - tune.mascotPivotX * overlayWidth;
+      final double top = pivotTarget.dy - tune.mascotPivotY * overlayHeight;
       final Rect overlayDest = Rect.fromLTWH(
         left,
         top,
@@ -1504,8 +1946,12 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     Size size, {
     required double zoom,
   }) {
-    final _ProjectedPoint center =
-        _projectPointStatic(worldCenter.dx, worldCenter.dy, size, zoom: zoom);
+    final _ProjectedPoint center = _projectPointStatic(
+      worldCenter.dx,
+      worldCenter.dy,
+      size,
+      zoom: zoom,
+    );
     final List<Offset> projectedVertices = <Offset>[
       for (final Offset local in _hexLocalVertices)
         _projectPointStatic(
@@ -1523,8 +1969,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     }
     path.close();
 
-    final double outerRadius =
-        (projectedVertices[0] - center.screen).distance;
+    final double outerRadius = (projectedVertices[0] - center.screen).distance;
 
     return _ProjectedHexPolygon(
       path: path,
@@ -1538,11 +1983,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     );
   }
 
-  Path _buildScaledInnerPath(
-    Path outerPath,
-    Offset center,
-    double innerScale,
-  ) {
+  Path _buildScaledInnerPath(Path outerPath, Offset center, double innerScale) {
     final Matrix4 transform = Matrix4.identity()
       ..translate(center.dx, center.dy)
       ..scale(innerScale, innerScale)
@@ -1557,11 +1998,9 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   static _ProjectedPoint _projectPointStatic(
     double worldX,
     double worldY,
-    Size size,
-    {
+    Size size, {
     required double zoom,
-  }
-  ) {
+  }) {
     final double scaledWorldX = worldX * zoom;
     final double scaledWorldY = worldY * zoom;
     final double zPlane = scaledWorldY + _planeDepthOffset;
@@ -1623,39 +2062,14 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   }
 
   SoldierDesignPalette _territoryFaction(Offset center) {
-    final Offset n = Offset(
-      (center.dx / (_landExtentX * 2)) + 0.5,
-      (center.dy / (landExtentY * 2)) + 0.5,
-    );
-
-    double score(Offset seed, double weight) {
-      final double dx = n.dx - seed.dx;
-      final double dy = n.dy - seed.dy;
-      final double distance2 = dx * dx + dy * dy;
-      return weight - distance2;
-    }
-
-    final double red =
-        score(const Offset(0.16, 0.38), 0.9) + math.sin(n.dy * 9.5) * 0.03;
-    final double yellow = score(const Offset(0.5, 0.48), 0.86) +
-        math.cos((n.dx + n.dy) * 8.5) * 0.035;
-    final double blue =
-        score(const Offset(0.82, 0.42), 0.92) + math.sin(n.dx * 10.0) * 0.03;
-
-    if (red >= yellow && red >= blue) {
-      return SoldierDesignPalette.red;
-    }
-    if (yellow >= red && yellow >= blue) {
-      return SoldierDesignPalette.yellow;
-    }
-    return SoldierDesignPalette.blue;
+    return _StrategicBoardScoring.territoryFaction(center);
   }
 
   /// Per-cell (stable) strength: **60%** L1, **25%** L2, **12%** L3, **3%** L4.
   static int _strengthLevel(Offset localCenter) {
     final int q = (localCenter.dx / (_baseRadius * 1.5)).round();
-    final int r =
-        ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
+    final int r = ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2)
+        .round();
     final int hash = ((q * 92821) ^ (r * 68917) ^ 0x5A17) & 0x7fffffff;
     final int bucket = hash % 100;
     if (bucket < 60) {
@@ -1672,8 +2086,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
 
   bool _isWarCell(Offset localCenter, SoldierDesignPalette faction) {
     final int q = (localCenter.dx / (_baseRadius * 1.5)).round();
-    final int r =
-        ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
+    final int r = ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2)
+        .round();
     const List<(int, int)> neighbors = <(int, int)>[
       (1, 0),
       (1, -1),
@@ -1706,16 +2120,16 @@ class _Pseudo3DBoardPainter extends CustomPainter {
       return false;
     }
     final int q = (local.dx / (_baseRadius * 1.5)).round();
-    final int r =
-        ((local.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
+    final int r = ((local.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
     return _isBoundaryWarVfxSlot(q, r);
   }
 
   bool _isMagicCell(Offset localCenter) {
     final int q = (localCenter.dx / (_baseRadius * 1.5)).round();
-    final int r =
-        ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2).round();
-    final int hash = ((q * 73856093) ^ (r * 19349663) ^ 0x1BADC0DE) & 0x7fffffff;
+    final int r = ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2)
+        .round();
+    final int hash =
+        ((q * 73856093) ^ (r * 19349663) ^ 0x1BADC0DE) & 0x7fffffff;
     return (hash % 17) == 0;
   }
 
@@ -1786,20 +2200,26 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     double hexGap = 0,
     double zoom = 1,
   }) {
-    final Offset currentAnchorLocal =
-        Offset(-currentOffset.dx, anchorWorldY - currentOffset.dy);
-    final Offset proposedAnchorLocal =
-        Offset(-proposedOffset.dx, anchorWorldY - proposedOffset.dy);
+    final Offset currentAnchorLocal = Offset(
+      -currentOffset.dx,
+      anchorWorldY - currentOffset.dy,
+    );
+    final Offset proposedAnchorLocal = Offset(
+      -proposedOffset.dx,
+      anchorWorldY - proposedOffset.dy,
+    );
 
     if (_isPointInsideLand(proposedAnchorLocal, hexGap)) {
       return proposedOffset;
     }
 
-    final Offset currentInside =
-        _isPointInsideLand(currentAnchorLocal, hexGap)
-            ? currentAnchorLocal
-            : _clampPointToLand(currentAnchorLocal, hexGap);
-    final Offset proposedClamped = _clampPointToLand(proposedAnchorLocal, hexGap);
+    final Offset currentInside = _isPointInsideLand(currentAnchorLocal, hexGap)
+        ? currentAnchorLocal
+        : _clampPointToLand(currentAnchorLocal, hexGap);
+    final Offset proposedClamped = _clampPointToLand(
+      proposedAnchorLocal,
+      hexGap,
+    );
     final Offset delta = proposedAnchorLocal - currentInside;
     final double deltaLength = delta.distance;
     if (deltaLength < 1e-6) {
@@ -1814,10 +2234,10 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     Offset finalLocal = proposedClamped;
     if (collisionNormal != Offset.zero && blockedDot > 0) {
       final Offset tangent = Offset(-collisionNormal.dy, collisionNormal.dx);
-      final double tangentDot =
-          delta.dx * tangent.dx + delta.dy * tangent.dy;
-      final Offset tangentDir =
-          tangentDot >= 0 ? tangent : Offset(-tangent.dx, -tangent.dy);
+      final double tangentDot = delta.dx * tangent.dx + delta.dy * tangent.dy;
+      final Offset tangentDir = tangentDot >= 0
+          ? tangent
+          : Offset(-tangent.dx, -tangent.dy);
       final double tangentLength = tangentDot.abs();
       final Offset slidLocal = _binarySearchAlongLandBoundary(
         validPoint: proposedClamped,
@@ -1938,12 +2358,10 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     final double length2 = ab.distanceSquared;
     if (length2 == 0) return a;
 
-    final double t = (((p.dx - a.dx) * ab.dx) + ((p.dy - a.dy) * ab.dy)) / length2;
+    final double t =
+        (((p.dx - a.dx) * ab.dx) + ((p.dy - a.dy) * ab.dy)) / length2;
     final double clampedT = t.clamp(0.0, 1.0);
-    return Offset(
-      a.dx + ab.dx * clampedT,
-      a.dy + ab.dy * clampedT,
-    );
+    return Offset(a.dx + ab.dx * clampedT, a.dy + ab.dy * clampedT);
   }
 
   @override
@@ -1968,17 +2386,19 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         oldDelegate.paintLayer != paintLayer;
   }
 
-  static const double _landExtentX = _baseRadius * (1 + 1.5 * (_landSideHexes - 1));
+  static const double _landExtentX =
+      _baseRadius * (1 + 1.5 * (_landSideHexes - 1));
   static final List<Offset> _baseLandTileCenters = _buildLandTileCenters();
-  static final Map<_HexAxial, Offset> _baseLandCentersByAxial = <_HexAxial, Offset>{
-    for (final Offset center in _baseLandTileCenters)
-      _HexAxial(
-        (center.dx / (_baseRadius * 1.5)).round(),
-        ((center.dy / (_baseRadius * math.sqrt(3))) -
-                (center.dx / (_baseRadius * 1.5)).round() / 2)
-            .round(),
-      ): center,
-  };
+  static final Map<_HexAxial, Offset> _baseLandCentersByAxial =
+      <_HexAxial, Offset>{
+        for (final Offset center in _baseLandTileCenters)
+          _HexAxial(
+            (center.dx / (_baseRadius * 1.5)).round(),
+            ((center.dy / (_baseRadius * math.sqrt(3))) -
+                    (center.dx / (_baseRadius * 1.5)).round() / 2)
+                .round(),
+          ): center,
+      };
   static const List<Offset> _hexLocalVertices = <Offset>[
     Offset(_baseRadius, 0),
     Offset(_baseRadius * 0.5, _hexHalfHeight),
@@ -2041,8 +2461,10 @@ class _ProjectedHexPolygon {
   final Color fillColor;
   final Color innerColor;
   final Offset center;
+
   /// Screen-space distance from [center] to a hex vertex (perspective-correct).
   final double outerRadius;
+
   /// Six screen-space outer hex vertices (same winding as [path]).
   final List<Offset> outerVertices;
   final int level;
@@ -2093,4 +2515,793 @@ class _HexAxial {
 
   @override
   int get hashCode => Object.hash(q, r);
+}
+
+class _StrategicBoardScoring {
+  static ({double red, double yellow, double blue}) territoryInfluenceScores(
+    Offset center,
+  ) {
+    final Offset n = Offset(
+      (center.dx / (_Pseudo3DBoardPainter._landExtentX * 2)) + 0.5,
+      (center.dy / (_Pseudo3DBoardPainter.landExtentY * 2)) + 0.5,
+    );
+
+    double score(Offset seed, double weight) {
+      final double dx = n.dx - seed.dx;
+      final double dy = n.dy - seed.dy;
+      final double distance2 = dx * dx + dy * dy;
+      return weight - distance2;
+    }
+
+    final double red =
+        score(const Offset(0.16, 0.38), 0.9) + math.sin(n.dy * 9.5) * 0.03;
+    final double yellow =
+        score(const Offset(0.5, 0.48), 0.86) +
+        math.cos((n.dx + n.dy) * 8.5) * 0.035;
+    final double blue =
+        score(const Offset(0.82, 0.42), 0.92) + math.sin(n.dx * 10.0) * 0.03;
+    return (red: red, yellow: yellow, blue: blue);
+  }
+
+  static SoldierDesignPalette territoryFaction(Offset center) {
+    final ({double red, double yellow, double blue}) scores =
+        territoryInfluenceScores(center);
+    if (scores.red >= scores.yellow && scores.red >= scores.blue) {
+      return SoldierDesignPalette.red;
+    }
+    if (scores.yellow >= scores.red && scores.yellow >= scores.blue) {
+      return SoldierDesignPalette.yellow;
+    }
+    return SoldierDesignPalette.blue;
+  }
+
+  static int influencePoints(double rawScore) {
+    return ((rawScore + 0.2) * 100).round().clamp(0, 99);
+  }
+
+  static _BoardAggregateScores buildAggregateScores(
+    SoldierDesignPalette playerFaction,
+  ) {
+    final Map<SoldierDesignPalette, int> countryCellCounts =
+        <SoldierDesignPalette, int>{
+          for (final SoldierDesignPalette faction
+              in SoldierDesignPalette.values)
+            faction: 0,
+        };
+    final Map<SoldierDesignPalette, int> enemyKillsByFaction =
+        <SoldierDesignPalette, int>{
+          for (final SoldierDesignPalette faction
+              in SoldierDesignPalette.values)
+            faction: 0,
+        };
+    final Map<SoldierRarity, int> rarityCounts = <SoldierRarity, int>{
+      for (final SoldierRarity rarity in SoldierRarity.values) rarity: 0,
+    };
+    int moneyCollected = 0;
+
+    for (final Offset localCenter
+        in _Pseudo3DBoardPainter._baseLandTileCenters) {
+      final SoldierDesignPalette faction = territoryFaction(localCenter);
+      countryCellCounts[faction] = (countryCellCounts[faction] ?? 0) + 1;
+
+      if (faction != playerFaction) {
+        continue;
+      }
+
+      final int level = _Pseudo3DBoardPainter._strengthLevel(localCenter);
+      moneyCollected += 12 + level * 5;
+
+      final (int q, int r) = _axialOf(localCenter);
+      if (!_Pseudo3DBoardPainter._isBoundaryWarVfxSlot(q, r)) {
+        continue;
+      }
+
+      for (final SoldierDesignPalette enemy in _enemyNeighborsOf(
+        localCenter,
+        faction,
+      )) {
+        enemyKillsByFaction[enemy] =
+            (enemyKillsByFaction[enemy] ?? 0) + (1 + level);
+      }
+    }
+
+    for (final SoldierDesign design in kProductionSoldierDesignCatalog) {
+      rarityCounts[design.rarity] = (rarityCounts[design.rarity] ?? 0) + 1;
+    }
+
+    final int totalEnemyKills = enemyKillsByFaction.entries
+        .where(
+          (MapEntry<SoldierDesignPalette, int> e) => e.key != playerFaction,
+        )
+        .fold<int>(
+          0,
+          (int sum, MapEntry<SoldierDesignPalette, int> e) => sum + e.value,
+        );
+    final int totalExp = moneyCollected + totalEnemyKills * 18;
+    int level = 1;
+    int expToNextLevel = 140;
+    int currentExp = totalExp;
+    while (currentExp >= expToNextLevel) {
+      currentExp -= expToNextLevel;
+      level += 1;
+      expToNextLevel = 140 + (level - 1) * 35;
+    }
+
+    return _BoardAggregateScores(
+      countryCellCounts: countryCellCounts,
+      enemyKillsByFaction: enemyKillsByFaction,
+      moneyCollected: moneyCollected,
+      personalLevel: level,
+      currentExp: currentExp,
+      expToNextLevel: expToNextLevel,
+      distinctSoldierCount: kProductionSoldierDesignCatalog.length,
+      rarityCounts: rarityCounts,
+    );
+  }
+
+  static Set<SoldierDesignPalette> _enemyNeighborsOf(
+    Offset localCenter,
+    SoldierDesignPalette faction,
+  ) {
+    final (int q, int r) = _axialOf(localCenter);
+    const List<(int, int)> neighbors = <(int, int)>[
+      (1, 0),
+      (1, -1),
+      (0, -1),
+      (-1, 0),
+      (-1, 1),
+      (0, 1),
+    ];
+    final Set<SoldierDesignPalette> enemies = <SoldierDesignPalette>{};
+    for (final (int dq, int dr) in neighbors) {
+      final Offset? neighborCenter = _Pseudo3DBoardPainter
+          ._baseLandCentersByAxial[_HexAxial(q + dq, r + dr)];
+      if (neighborCenter == null) {
+        continue;
+      }
+      final SoldierDesignPalette neighborFaction = territoryFaction(
+        neighborCenter,
+      );
+      if (neighborFaction != faction) {
+        enemies.add(neighborFaction);
+      }
+    }
+    return enemies;
+  }
+
+  static (int, int) _axialOf(Offset localCenter) {
+    final int q = (localCenter.dx / (_Pseudo3DBoardPainter._baseRadius * 1.5))
+        .round();
+    final int r =
+        ((localCenter.dy / (_Pseudo3DBoardPainter._baseRadius * math.sqrt(3))) -
+                q / 2)
+            .round();
+    return (q, r);
+  }
+}
+
+class _BoardAggregateScores {
+  const _BoardAggregateScores({
+    required this.countryCellCounts,
+    required this.enemyKillsByFaction,
+    required this.moneyCollected,
+    required this.personalLevel,
+    required this.currentExp,
+    required this.expToNextLevel,
+    required this.distinctSoldierCount,
+    required this.rarityCounts,
+  });
+
+  final Map<SoldierDesignPalette, int> countryCellCounts;
+  final Map<SoldierDesignPalette, int> enemyKillsByFaction;
+  final int moneyCollected;
+  final int personalLevel;
+  final int currentExp;
+  final int expToNextLevel;
+  final int distinctSoldierCount;
+  final Map<SoldierRarity, int> rarityCounts;
+}
+
+enum _HudPanelKind { kingdom, land, heroProfile, heroArmy }
+
+class _HudScorePanelModel {
+  const _HudScorePanelModel({
+    required this.kind,
+    required this.title,
+    required this.themeFaction,
+    required this.rows,
+    this.subtitle,
+    this.heroStats,
+    this.panelIcon,
+  });
+
+  final _HudPanelKind kind;
+  final String title;
+  final String? subtitle;
+  final SoldierDesignPalette themeFaction;
+  final List<_HudScoreRowModel> rows;
+  final _HudHeroStats? heroStats;
+  final _HudPanelIconData? panelIcon;
+}
+
+class _HudPanelIconData {
+  const _HudPanelIconData({
+    required this.assetPath,
+    required this.imageScale,
+    required this.imageOffset,
+  });
+
+  final String assetPath;
+  final double imageScale;
+  final Offset imageOffset;
+}
+
+class _HudHeroStats {
+  const _HudHeroStats({
+    required this.level,
+    required this.currentExp,
+    required this.expToNextLevel,
+    required this.distinctSoldiers,
+    required this.moneyCollected,
+    required this.rarityCounts,
+    required this.joystickAssetPath,
+    required this.joystickImageScale,
+    required this.joystickImageOffset,
+  });
+
+  final int level;
+  final int currentExp;
+  final int expToNextLevel;
+  final int distinctSoldiers;
+  final int moneyCollected;
+  final Map<SoldierRarity, int> rarityCounts;
+  final String joystickAssetPath;
+  final double joystickImageScale;
+  final Offset joystickImageOffset;
+}
+
+class _HudScoreRowModel {
+  const _HudScoreRowModel({
+    required this.faction,
+    required this.label,
+    required this.value,
+    this.delta = 0,
+    this.emphasis = false,
+    this.valuePrefix = '',
+  });
+
+  final SoldierDesignPalette faction;
+  final String label;
+  final int value;
+  final int delta;
+  final bool emphasis;
+  final String valuePrefix;
+}
+
+class _HudScorePanelCard extends StatelessWidget {
+  const _HudScorePanelCard({required this.model});
+
+  final _HudScorePanelModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Color> theme = factionTierList(model.themeFaction);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          theme[0].withValues(alpha: 0.12),
+          const Color(0xE20B1020),
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme[2].withValues(alpha: 0.62), width: 1.1),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: theme[1].withValues(alpha: 0.18),
+            blurRadius: 12,
+            spreadRadius: 0.5,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
+        child: switch (model.kind) {
+          _HudPanelKind.kingdom => _HudKingdomPanelBody(model: model),
+          _HudPanelKind.land => _HudLandPanelBody(model: model),
+          _HudPanelKind.heroProfile => _HudHeroProfilePanelBody(model: model),
+          _HudPanelKind.heroArmy => _HudHeroArmyPanelBody(model: model),
+        },
+      ),
+    );
+  }
+}
+
+class _HudKingdomPanelBody extends StatelessWidget {
+  const _HudKingdomPanelBody({required this.model});
+
+  final _HudScorePanelModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Color> theme = factionTierList(model.themeFaction);
+    final _HudPanelIconData icon = model.panelIcon!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: _HudPanelHeader(model: model, accent: theme[2]),
+            ),
+            SizedBox(
+              width: 38,
+              height: 38,
+              child: _HudFactionAvatar(
+                assetPath: icon.assetPath,
+                imageScale: icon.imageScale,
+                imageOffset: icon.imageOffset,
+                theme: theme,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            SizedBox(
+              width: 62,
+              height: 58,
+              child: CustomPaint(
+                painter: _HudKingdomMinimapPainter(
+                  themeFaction: model.themeFaction,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                children: <Widget>[
+                  for (int i = 0; i < model.rows.length; i++) ...<Widget>[
+                    _HudFactionScoreRow(model: model.rows[i]),
+                    if (i != model.rows.length - 1) const SizedBox(height: 5),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _HudLandPanelBody extends StatelessWidget {
+  const _HudLandPanelBody({required this.model});
+
+  final _HudScorePanelModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Color> theme = factionTierList(model.themeFaction);
+    final _HudPanelIconData icon = model.panelIcon!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: _HudPanelHeader(model: model, accent: theme[2]),
+            ),
+            SizedBox(
+              width: 38,
+              height: 38,
+              child: _HudFactionAvatar(
+                assetPath: icon.assetPath,
+                imageScale: icon.imageScale,
+                imageOffset: icon.imageOffset,
+                theme: theme,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        for (int i = 0; i < model.rows.length; i++) ...<Widget>[
+          _HudFactionScoreRow(model: model.rows[i]),
+          if (i != model.rows.length - 1) const SizedBox(height: 5),
+        ],
+      ],
+    );
+  }
+}
+
+class _HudHeroProfilePanelBody extends StatelessWidget {
+  const _HudHeroProfilePanelBody({required this.model});
+
+  final _HudScorePanelModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final _HudHeroStats stats = model.heroStats!;
+    final List<Color> theme = factionTierList(model.themeFaction);
+    final double progress = stats.expToNextLevel <= 0
+        ? 0
+        : stats.currentExp / stats.expToNextLevel;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: _HudPanelHeader(model: model, accent: theme[2]),
+            ),
+            SizedBox(
+              width: 38,
+              height: 38,
+              child: _HudFactionAvatar(
+                assetPath: stats.joystickAssetPath,
+                imageScale: stats.joystickImageScale,
+                imageOffset: stats.joystickImageOffset,
+                theme: theme,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: <Widget>[
+            _HudHeroMetricPill(
+              label: 'Lvl',
+              value: stats.level.toString(),
+              color: theme[2],
+            ),
+            const SizedBox(width: 6),
+            _HudHeroMetricPill(
+              label: 'Gold',
+              value: '\$${_formatCompactInt(stats.moneyCollected)}',
+              color: theme[3],
+            ),
+            const SizedBox(width: 6),
+            _HudHeroMetricPill(
+              label: 'Owned',
+              value: stats.distinctSoldiers.toString(),
+              color: theme[4],
+            ),
+          ],
+        ),
+        const SizedBox(height: 7),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: SizedBox(
+            height: 8,
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              backgroundColor: const Color(0x33FFFFFF),
+              valueColor: AlwaysStoppedAnimation<Color>(theme[2]),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'EXP ${stats.currentExp}/${stats.expToNextLevel}',
+          style: const TextStyle(
+            color: Color(0xFFF7FBFF),
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HudHeroArmyPanelBody extends StatelessWidget {
+  const _HudHeroArmyPanelBody({required this.model});
+
+  final _HudScorePanelModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final _HudHeroStats stats = model.heroStats!;
+    final List<Color> theme = factionTierList(model.themeFaction);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _HudPanelHeader(model: model, accent: theme[2]),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 5,
+          runSpacing: 5,
+          children: SoldierRarity.values
+              .map(
+                (SoldierRarity rarity) => _HudRarityChip(
+                  rarity: rarity,
+                  count: stats.rarityCounts[rarity] ?? 0,
+                ),
+              )
+              .toList(),
+        ),
+        const SizedBox(height: 7),
+        for (int i = 0; i < model.rows.length; i++) ...<Widget>[
+          _HudFactionScoreRow(model: model.rows[i], compact: true),
+          if (i != model.rows.length - 1) const SizedBox(height: 4),
+        ],
+      ],
+    );
+  }
+}
+
+class _HudPanelHeader extends StatelessWidget {
+  const _HudPanelHeader({required this.model, required this.accent});
+
+  final _HudScorePanelModel model;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          model.title,
+          style: TextStyle(
+            color: accent.withValues(alpha: 0.98),
+            fontSize: 11.5,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.15,
+          ),
+        ),
+        if (model.subtitle != null)
+          Text(
+            model.subtitle!,
+            style: const TextStyle(
+              color: Color(0xFFF7FBFF),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _HudFactionScoreRow extends StatelessWidget {
+  const _HudFactionScoreRow({required this.model, this.compact = false});
+
+  final _HudScoreRowModel model;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color chipColor = factionTierColor(
+      model.faction,
+      model.emphasis ? 2 : 3,
+    );
+    final String valueText =
+        '${model.valuePrefix}${_formatCompactInt(model.value)}';
+    final double labelSize = compact ? 9.8 : 10.3;
+    final double valueSize = compact ? 10.5 : 11.2;
+    return Row(
+      children: <Widget>[
+        Container(
+          width: compact ? 7 : 8,
+          height: compact ? 7 : 8,
+          decoration: BoxDecoration(
+            color: chipColor,
+            shape: BoxShape.circle,
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: chipColor.withValues(alpha: 0.45),
+                blurRadius: 6,
+                spreadRadius: 0.4,
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: compact ? 5 : 6),
+        Expanded(
+          child: Text(
+            model.label,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: labelSize,
+              fontWeight: model.emphasis ? FontWeight.w900 : FontWeight.w700,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Text(
+          valueText,
+          style: TextStyle(
+            color: chipColor.withValues(alpha: 0.98),
+            fontSize: valueSize,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HudFactionAvatar extends StatelessWidget {
+  const _HudFactionAvatar({
+    required this.assetPath,
+    required this.imageScale,
+    required this.imageOffset,
+    required this.theme,
+  });
+
+  final String assetPath;
+  final double imageScale;
+  final Offset imageOffset;
+  final List<Color> theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: theme[1].withValues(alpha: 0.14),
+        border: Border.all(color: theme[2].withValues(alpha: 0.58)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: theme[1].withValues(alpha: 0.2),
+            blurRadius: 10,
+            spreadRadius: 0.5,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: ClipOval(
+          child: Transform.translate(
+            offset: imageOffset,
+            child: Transform.scale(
+              scale: imageScale,
+              child: Image.asset(assetPath, fit: BoxFit.cover),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HudHeroMetricPill extends StatelessWidget {
+  const _HudHeroMetricPill({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.45)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          child: Column(
+            children: <Widget>[
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFFF7FBFF),
+                  fontSize: 8.3,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                value,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 10.2,
+                  fontWeight: FontWeight.w900,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HudRarityChip extends StatelessWidget {
+  const _HudRarityChip({required this.rarity, required this.count});
+
+  final SoldierRarity rarity;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: rarity.accentColor.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: rarity.accentColor.withValues(alpha: 0.52)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        child: Text(
+          '${rarity.label} $count',
+          style: TextStyle(
+            color: rarity.accentColor,
+            fontSize: 8.8,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HudKingdomMinimapPainter extends CustomPainter {
+  _HudKingdomMinimapPainter({required this.themeFaction});
+
+  final SoldierDesignPalette themeFaction;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final RRect frame = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      const Radius.circular(10),
+    );
+    canvas.drawRRect(frame, Paint()..color = const Color(0x90060A14));
+
+    final Paint border = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = factionTierColor(themeFaction, 2).withValues(alpha: 0.62);
+    canvas.drawRRect(frame, border);
+
+    final double minX = -_Pseudo3DBoardPainter._landExtentX;
+    final double maxX = _Pseudo3DBoardPainter._landExtentX;
+    final double minY = -_Pseudo3DBoardPainter.landExtentY;
+    final double maxY = _Pseudo3DBoardPainter.landExtentY;
+    final double width = maxX - minX;
+    final double height = maxY - minY;
+    final double usableW = size.width - 8;
+    final double usableH = size.height - 8;
+
+    for (final Offset localCenter
+        in _Pseudo3DBoardPainter._baseLandTileCenters) {
+      final SoldierDesignPalette faction =
+          _StrategicBoardScoring.territoryFaction(localCenter);
+      final int level = _Pseudo3DBoardPainter._strengthLevel(localCenter);
+      final int tier = 5 - level;
+      final double nx = (localCenter.dx - minX) / width;
+      final double ny = (localCenter.dy - minY) / height;
+      final Offset p = Offset(4 + nx * usableW, 4 + (1 - ny) * usableH);
+      canvas.drawCircle(
+        p,
+        1.25,
+        Paint()..color = factionTierColor(faction, tier),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HudKingdomMinimapPainter oldDelegate) {
+    return oldDelegate.themeFaction != themeFaction;
+  }
+}
+
+String _formatCompactInt(int value) {
+  if (value >= 10000) {
+    return '${(value / 1000).toStringAsFixed(1)}k';
+  }
+  return value.toString();
 }
