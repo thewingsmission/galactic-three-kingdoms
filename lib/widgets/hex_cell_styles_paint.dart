@@ -15,6 +15,7 @@ class HexCellStylesPaint {
   static Path _path(List<Offset> v) => HexCellPreviewLayout.pathFromVerts(v);
 
   static const double _innerT = A1HexCellPaint.innerScale;
+
   /// Three bands inside the outer hex; first ring uses [_a2FirstRingDeltaT], then [_a2RingDeltaT].
   static const int _a2RingCount = 3;
 
@@ -50,12 +51,13 @@ class HexCellStylesPaint {
   static const double l2SecondRingDeltaT = _l2SecondRingDeltaT;
 
   static Color l2AccentForSoldierPalette(SoldierDesignPalette p) => switch (p) {
-        SoldierDesignPalette.red => _l2AccentRed,
-        SoldierDesignPalette.yellow => _l2AccentYellow,
-        SoldierDesignPalette.blue => _l2AccentBlue,
-      };
+    SoldierDesignPalette.red => _l2AccentRed,
+    SoldierDesignPalette.yellow => _l2AccentYellow,
+    SoldierDesignPalette.blue => _l2AccentBlue,
+  };
 
-  static Color l4TriangleForSoldierPalette(SoldierDesignPalette p) => switch (p) {
+  static Color l4TriangleForSoldierPalette(SoldierDesignPalette p) =>
+      switch (p) {
         SoldierDesignPalette.red => _l4TriangleRed,
         SoldierDesignPalette.yellow => _l4TriangleYellow,
         SoldierDesignPalette.blue => _l4TriangleBlue,
@@ -130,6 +132,7 @@ class HexCellStylesPaint {
     List<Offset> outerVertices,
     Color fillColor,
     double secondRingDeltaT,
+    Set<int>? cornerIndices,
   ) {
     final List<Offset> v1 = _scaledVerts(center, outerVertices, 1.0);
     final double t2 = _l2TAtBoundary(_l2RingCount, secondRingDeltaT);
@@ -137,11 +140,10 @@ class HexCellStylesPaint {
     final Paint paint = Paint()..color = fillColor;
 
     for (int i = 0; i < 6; i++) {
-      final Path? para = _l2CornerParallelogramPathForCorner(
-        v1,
-        v2,
-        i,
-      );
+      if (cornerIndices != null && !cornerIndices.contains(i)) {
+        continue;
+      }
+      final Path? para = _l2CornerParallelogramPathForCorner(v1, v2, i);
       if (para != null) {
         canvas.drawPath(para, paint);
       }
@@ -150,8 +152,9 @@ class HexCellStylesPaint {
 
   /// L2–L4: outer **#1** fixed; inner band [l2AccentColor].
   /// [paintCornerParallelograms]: **L3**/**L4**; off for **L2**.
-  /// [innerCornerTriangleUnit]: **L4** only — **A1**-style triangles on inner-hole vertices.
-  /// [l4TriangleFill]: **L4** triangle fill when [innerCornerTriangleUnit] is set; default [palette.highlight].
+  /// [cornerParallelogramIndices] limits which corner parallelograms are painted.
+  /// [innerCornerTriangleUnit]: triangle layer for the highest level variant.
+  /// [l4TriangleFill]: triangle fill when [innerCornerTriangleUnit] is set; default [palette.highlight].
   static void _paintL2HexRings(
     Canvas canvas,
     Offset center,
@@ -160,6 +163,7 @@ class HexCellStylesPaint {
     required Color l2AccentColor,
     double l2SecondRingDeltaT = _l2SecondRingDeltaT,
     bool paintCornerParallelograms = true,
+    Set<int>? cornerParallelogramIndices,
     double? innerCornerTriangleUnit,
     Color? l4TriangleFill,
   }) {
@@ -197,6 +201,7 @@ class HexCellStylesPaint {
         outerVertices,
         l2AccentColor,
         l2SecondRingDeltaT,
+        cornerParallelogramIndices,
       );
     }
 
@@ -222,8 +227,9 @@ class HexCellStylesPaint {
     Offset center,
     List<Offset> outerVertices,
     double t,
-  ) =>
-      <Offset>[for (final Offset v in outerVertices) center + (v - center) * t];
+  ) => <Offset>[
+    for (final Offset v in outerVertices) center + (v - center) * t,
+  ];
 
   /// Scale at boundary [b]: ring 1 width [_a2FirstRingDeltaT], then [_a2RingDeltaT] per step.
   static double _a2TAtBoundary(int b) {
@@ -266,9 +272,7 @@ class HexCellStylesPaint {
     }
 
     canvas.drawPath(
-      _path(
-        _scaledVerts(center, outerVertices, _a2TAtBoundary(_a2RingCount)),
-      ),
+      _path(_scaledVerts(center, outerVertices, _a2TAtBoundary(_a2RingCount))),
       Paint()..color = palette.innerHexHolePaintFrom(ringFills[2]),
     );
 
@@ -278,10 +282,7 @@ class HexCellStylesPaint {
       ..strokeWidth = innerBoundaryStrokeWidth;
     for (int k = 1; k <= _a2RingCount; k++) {
       final double t = _a2TAtBoundary(k);
-      canvas.drawPath(
-        _path(_scaledVerts(center, outerVertices, t)),
-        innerLine,
-      );
+      canvas.drawPath(_path(_scaledVerts(center, outerVertices, t)), innerLine);
     }
     canvas.restore();
   }
@@ -321,6 +322,7 @@ class HexCellStylesPaint {
           outerVertices,
           palette,
           l2AccentColor: l2AccentForSoldierPalette(boardFaction),
+          cornerParallelogramIndices: <int>{0, 2, 4},
         );
         return;
       case HexCellPreviewStyle.l4:
@@ -330,8 +332,6 @@ class HexCellStylesPaint {
           outerVertices,
           palette,
           l2AccentColor: l2AccentForSoldierPalette(boardFaction),
-          innerCornerTriangleUnit: A1HexCellPaint.cornerTriangleUnitForMap(outerRadius),
-          l4TriangleFill: l4TriangleForSoldierPalette(boardFaction),
         );
         return;
       case HexCellPreviewStyle.a1:

@@ -30,6 +30,7 @@ class Pseudo3DScene extends StatefulWidget {
     this.maxViewportWidth = 980,
     this.spritesheetPivotX = _CenterSoldierSpritesheetMetrics.pivotX,
     this.spritesheetPivotY = _CenterSoldierSpritesheetMetrics.pivotY,
+    this.onHudVisibilityChanged,
   });
 
   final Pseudo3DMeshMode meshMode;
@@ -40,6 +41,7 @@ class Pseudo3DScene extends StatefulWidget {
   final double maxViewportWidth;
   final double spritesheetPivotX;
   final double spritesheetPivotY;
+  final ValueChanged<bool>? onHudVisibilityChanged;
 
   @override
   State<Pseudo3DScene> createState() => _Pseudo3DSceneState();
@@ -467,6 +469,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   }
 
   void _updateScorePanelTracking(double elapsedSeconds) {
+    final bool wasVisible = _showScorePanel;
     final Offset? shadowCell = _currentShadowSteppedCellLocalCenter();
     if (!_sameLocalCenter(shadowCell, _trackedShadowCellLocalCenter)) {
       _trackedShadowCellLocalCenter = shadowCell;
@@ -478,6 +481,9 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     if (_movementVector != Offset.zero || shadowCell == null) {
       _showScorePanel = false;
       _scorePanelCellLocalCenter = null;
+      if (wasVisible != _showScorePanel) {
+        widget.onHudVisibilityChanged?.call(_showScorePanel);
+      }
       return;
     }
 
@@ -489,6 +495,9 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     } else {
       _showScorePanel = false;
       _scorePanelCellLocalCenter = null;
+    }
+    if (wasVisible != _showScorePanel) {
+      widget.onHudVisibilityChanged?.call(_showScorePanel);
     }
   }
 
@@ -900,11 +909,11 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     final List<_HudScorePanelModel> panels = _buildHudPanels();
     return IgnorePointer(
       child: AnimatedSlide(
-        duration: const Duration(milliseconds: 220),
-        offset: _showScorePanel ? Offset.zero : const Offset(0, -0.08),
+        duration: const Duration(milliseconds: 520),
+        offset: _showScorePanel ? Offset.zero : const Offset(0, -0.22),
         curve: Curves.easeOutCubic,
         child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 220),
+          duration: const Duration(milliseconds: 520),
           opacity: _showScorePanel ? 1 : 0,
           curve: Curves.easeOutCubic,
           child: Padding(

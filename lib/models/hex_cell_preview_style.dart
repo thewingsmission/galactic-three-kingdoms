@@ -9,10 +9,10 @@ enum HexCellPreviewStyle {
   /// L2: two-ring layout; fixed faction accent; **no** corner parallelograms.
   l2,
 
-  /// L3: same rings + accent as **L2**, plus six corner parallelograms (no inner triangles).
+  /// L3: same rings + accent as **L2**, plus only three corner parallelograms.
   l3,
 
-  /// L4: **L3** plus six **A1**-style triangles on the inner hex (hole) vertices.
+  /// L4: previous **L3** look with six corner parallelograms.
   l4,
 
   /// A1: gold rim, echoes, inner corner triangles ([A1HexCellPaint]).

@@ -34,8 +34,7 @@ class _MainScreenState extends State<MainScreen> {
     outerBlur: 2,
     innerBlur: 0,
   );
-  _TempBottomRibbonDesign _bottomRibbonDesign =
-      _TempBottomRibbonDesign.defaultMode;
+  bool _hudPanelsVisible = false;
 
   @override
   Widget build(BuildContext context) {
@@ -50,23 +49,14 @@ class _MainScreenState extends State<MainScreen> {
                 meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
                 boardBottomInset: 0,
                 viewportHeightFactor: 0.92,
-              ),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            left: 12,
-            bottom: 0,
-            child: SafeArea(
-              child: Center(
-                child: _TempBottomRibbonPanel(
-                  selectedDesign: _bottomRibbonDesign,
-                  onChanged: (_TempBottomRibbonDesign value) {
-                    setState(() {
-                      _bottomRibbonDesign = value;
-                    });
-                  },
-                ),
+                onHudVisibilityChanged: (bool visible) {
+                  if (_hudPanelsVisible == visible) {
+                    return;
+                  }
+                  setState(() {
+                    _hudPanelsVisible = visible;
+                  });
+                },
               ),
             ),
           ),
@@ -74,110 +64,27 @@ class _MainScreenState extends State<MainScreen> {
             left: 0,
             right: 0,
             bottom: 0,
-            child: _BottomRibbon(
-              designIndex:
-                  _bottomRibbonDesign == _TempBottomRibbonDesign.defaultMode
-                  ? 0
-                  : 10,
-              onOpenDesigns: widget.onOpenDesigns,
-              onOpenInventory: widget.onOpenInventory,
-              onOpenWar: widget.onOpenWar,
+            child: IgnorePointer(
+              ignoring: !_hudPanelsVisible,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 520),
+                offset: _hudPanelsVisible ? Offset.zero : const Offset(0, 0.26),
+                curve: Curves.easeOutCubic,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 520),
+                  opacity: _hudPanelsVisible ? 1 : 0,
+                  curve: Curves.easeOutCubic,
+                  child: _BottomRibbon(
+                    designIndex: 0,
+                    onOpenDesigns: widget.onOpenDesigns,
+                    onOpenInventory: widget.onOpenInventory,
+                    onOpenWar: widget.onOpenWar,
+                  ),
+                ),
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-enum _TempBottomRibbonDesign { defaultMode, color }
-
-class _TempBottomRibbonPanel extends StatelessWidget {
-  const _TempBottomRibbonPanel({
-    required this.selectedDesign,
-    required this.onChanged,
-  });
-
-  final _TempBottomRibbonDesign selectedDesign;
-  final ValueChanged<_TempBottomRibbonDesign> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xCC0A1220),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.28),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            _TempBottomRibbonButton(
-              label: 'Default',
-              isSelected: selectedDesign == _TempBottomRibbonDesign.defaultMode,
-              onTap: () => onChanged(_TempBottomRibbonDesign.defaultMode),
-            ),
-            const SizedBox(width: 6),
-            _TempBottomRibbonButton(
-              label: 'Color',
-              isSelected: selectedDesign == _TempBottomRibbonDesign.color,
-              onTap: () => onChanged(_TempBottomRibbonDesign.color),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TempBottomRibbonButton extends StatelessWidget {
-  const _TempBottomRibbonButton({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: isSelected
-                ? const Color(0xFF3A74FF).withValues(alpha: 0.26)
-                : Colors.white.withValues(alpha: 0.04),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFF9BC0FF)
-                  : Colors.white.withValues(alpha: 0.14),
-            ),
-          ),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1104,7 +1011,6 @@ class _BottomRibbon extends StatelessWidget {
 
     return switch (designIndex) {
       0 => _buildClassic(context, actions),
-      10 => _buildColorClassic(context, actions),
       1 => _buildGlassRail(context, actions),
       2 => _buildSpeedTabs(context, actions),
       3 => _buildInsetConsole(context, actions),
@@ -1130,14 +1036,6 @@ class _BottomRibbon extends StatelessWidget {
       fontWeight: weight,
       letterSpacing: spacing,
     );
-  }
-
-  Color _purpleRibbonTierColor(int tier) {
-    final HSLColor source = HSLColor.fromColor(
-      factionTierColor(SoldierDesignPalette.red, tier),
-    );
-    final double purpleHue = HSLColor.fromColor(const Color(0xFFA44BFF)).hue;
-    return source.withHue(purpleHue).toColor();
   }
 
   Widget _circleShell({
@@ -1302,130 +1200,6 @@ class _BottomRibbon extends StatelessWidget {
             glowDyHeightUnits: glowDyHeightUnits,
             imageScaleRatios: imageScaleRatios,
             visualScaleRatios: visualScaleRatios,
-            showGlow: true,
-            contentOffsetYPx: 0,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildColorClassic(BuildContext context, List<_RibbonAction> actions) {
-    final TextStyle labelStyle = _labelStyle(
-      context,
-      color: Colors.white.withValues(alpha: 0.95),
-      size: 10,
-      weight: FontWeight.w800,
-      spacing: 0.35,
-    );
-    return SizedBox(
-      height: 98,
-      child: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final List<Color> accentColors = <Color>[
-            factionTierColor(SoldierDesignPalette.red, 1),
-            factionTierColor(SoldierDesignPalette.yellow, 1),
-            factionTierColor(SoldierDesignPalette.blue, 1),
-            _purpleRibbonTierColor(1),
-            factionTierColor(SoldierDesignPalette.blue, 1),
-            factionTierColor(SoldierDesignPalette.yellow, 1),
-            factionTierColor(SoldierDesignPalette.red, 1),
-          ];
-          final List<Color> fillColors = <Color>[
-            factionTierColor(
-              SoldierDesignPalette.red,
-              3,
-            ).withValues(alpha: 0.5),
-            factionTierColor(
-              SoldierDesignPalette.yellow,
-              3,
-            ).withValues(alpha: 0.5),
-            factionTierColor(
-              SoldierDesignPalette.blue,
-              3,
-            ).withValues(alpha: 0.5),
-            _purpleRibbonTierColor(3).withValues(alpha: 0.5),
-            factionTierColor(
-              SoldierDesignPalette.blue,
-              3,
-            ).withValues(alpha: 0.5),
-            factionTierColor(
-              SoldierDesignPalette.yellow,
-              3,
-            ).withValues(alpha: 0.5),
-            factionTierColor(
-              SoldierDesignPalette.red,
-              3,
-            ).withValues(alpha: 0.5),
-          ];
-          final List<Color> borderColors = <Color>[
-            Colors.transparent,
-            Colors.transparent,
-            Colors.transparent,
-            Colors.transparent,
-            Colors.transparent,
-            Colors.transparent,
-            Colors.transparent,
-          ];
-          const List<double> imageDxWidthUnits = <double>[
-            0.01,
-            0.00,
-            0.00,
-            -0.01,
-            0.00,
-            0.00,
-            0.00,
-          ];
-          const List<double> imageDyHeightUnits = <double>[
-            0.03,
-            0.01,
-            0.00,
-            0.055,
-            0.00,
-            0.02,
-            0.00,
-          ];
-          const List<double> glowDyHeightUnits = <double>[
-            0.00,
-            0.00,
-            0.00,
-            0.04,
-            0.00,
-            0.00,
-            0.00,
-          ];
-          const List<double> imageScaleRatios = <double>[
-            1.27,
-            0.95,
-            1.31,
-            1.495,
-            1.20,
-            0.97,
-            1.16,
-          ];
-          const List<double> visualScaleRatios = <double>[
-            1.00,
-            1.00,
-            1.00,
-            1.00,
-            1.00,
-            1.00,
-            1.00,
-          ];
-          return _buildPolygonClassicPanel(
-            constraints: constraints,
-            actions: actions,
-            labelStyle: labelStyle,
-            accentColors: accentColors,
-            fillColors: fillColors,
-            borderColors: borderColors,
-            imageDxWidthUnits: imageDxWidthUnits,
-            imageDyHeightUnits: imageDyHeightUnits,
-            glowDyHeightUnits: glowDyHeightUnits,
-            imageScaleRatios: imageScaleRatios,
-            visualScaleRatios: visualScaleRatios,
-            showGlow: false,
-            contentOffsetYPx: -10,
           );
         },
       ),
@@ -1444,8 +1218,6 @@ class _BottomRibbon extends StatelessWidget {
     required List<double> glowDyHeightUnits,
     required List<double> imageScaleRatios,
     required List<double> visualScaleRatios,
-    required bool showGlow,
-    required double contentOffsetYPx,
   }) {
     const double buttonHeight = 81.84;
     const double warWidthScale = 1.10;
@@ -1521,9 +1293,6 @@ class _BottomRibbon extends StatelessWidget {
             glowDeltaYHeightUnits: glowDyHeightUnits[index],
             imageScaleRatio: imageScaleRatios[index],
             visualScaleRatio: visualScaleRatios[index],
-            showGlow: showGlow,
-            paintPolygonSurface: showGlow,
-            contentOffsetYPx: contentOffsetYPx,
           );
         })(),
     ];
@@ -2417,9 +2186,6 @@ class _RibbonPolygonButtonSpec {
     required this.glowDeltaYHeightUnits,
     required this.imageScaleRatio,
     required this.visualScaleRatio,
-    this.showGlow = true,
-    this.paintPolygonSurface = true,
-    this.contentOffsetYPx = 0,
   });
 
   final String label;
@@ -2434,9 +2200,6 @@ class _RibbonPolygonButtonSpec {
   final double glowDeltaYHeightUnits;
   final double imageScaleRatio;
   final double visualScaleRatio;
-  final bool showGlow;
-  final bool paintPolygonSurface;
-  final double contentOffsetYPx;
 }
 
 class _PolygonRibbonPanel extends StatefulWidget {
@@ -2695,16 +2458,14 @@ class _PolygonRibbonPainter extends CustomPainter {
     for (int index = 0; index < specs.length; index++) {
       final _RibbonPolygonButtonSpec spec = specs[index];
       final Path path = Path()..addPolygon(spec.polygon, true);
-      if (spec.paintPolygonSurface) {
-        canvas.drawPath(path, Paint()..color = spec.fill);
-        canvas.drawPath(
-          path,
-          Paint()
-            ..color = spec.border
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.2,
-        );
-      }
+      canvas.drawPath(path, Paint()..color = spec.fill);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = spec.border
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2,
+      );
 
       final double minX = spec.polygon.map((Offset p) => p.dx).reduce(math.min);
       final double maxX = spec.polygon.map((Offset p) => p.dx).reduce(math.max);
@@ -2740,12 +2501,12 @@ class _PolygonRibbonPainter extends CustomPainter {
         final Rect outputSubrect = baseOutputSubrect.shift(
           Offset(
             spec.imageDeltaXWidthUnits * bounds.width,
-            spec.imageDeltaYHeightUnits * bounds.height + spec.contentOffsetYPx,
+            spec.imageDeltaYHeightUnits * bounds.height,
           ),
         );
         final Offset imageGlowCenter = contentRect.center.translate(
           0,
-          spec.glowDeltaYHeightUnits * bounds.height + spec.contentOffsetYPx,
+          spec.glowDeltaYHeightUnits * bounds.height,
         );
         final double imageGlowRadius =
             math.max(contentRect.width, contentRect.height) *
@@ -2765,50 +2526,29 @@ class _PolygonRibbonPainter extends CustomPainter {
             ..translate(-pivot.dx, -pivot.dy);
         }
 
-        if (spec.showGlow) {
-          final Path outerHexGlow = _buildHexagonPath(
-            imageGlowCenter,
-            imageGlowRadius * 0.71,
-          );
-          final Path innerHexGlow = _buildHexagonPath(
-            imageGlowCenter,
-            imageGlowRadius * 0.61,
-          );
-          canvas.save();
-          canvas.transform(pivotScaleMatrix(glowPivot, effectiveScale).storage);
-          canvas.drawPath(
-            outerHexGlow,
-            Paint()
-              ..color = Colors.white.withValues(alpha: 0.54)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-          );
-          canvas.drawPath(
-            innerHexGlow,
-            Paint()
-              ..color = Colors.white.withValues(alpha: 0.74)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0),
-          );
-          canvas.restore();
-        } else {
-          final Path outerHex = _buildHexagonPath(
-            imageGlowCenter,
-            imageGlowRadius * 0.71,
-          );
-          final Color badgeFill = spec.fill.withValues(
-            alpha: math.min(1.0, spec.fill.a + 0.08),
-          );
-          canvas.save();
-          canvas.transform(pivotScaleMatrix(glowPivot, effectiveScale).storage);
-          canvas.drawPath(outerHex, Paint()..color = badgeFill);
-          canvas.drawPath(
-            outerHex,
-            Paint()
-              ..color = spec.accentColor
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 2.4,
-          );
-          canvas.restore();
-        }
+        final Path outerHexGlow = _buildHexagonPath(
+          imageGlowCenter,
+          imageGlowRadius * 0.71,
+        );
+        final Path innerHexGlow = _buildHexagonPath(
+          imageGlowCenter,
+          imageGlowRadius * 0.61,
+        );
+        canvas.save();
+        canvas.transform(pivotScaleMatrix(glowPivot, effectiveScale).storage);
+        canvas.drawPath(
+          outerHexGlow,
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.54)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        );
+        canvas.drawPath(
+          innerHexGlow,
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.74)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0),
+        );
+        canvas.restore();
         canvas.save();
         canvas.clipPath(path);
         canvas.transform(pivotScaleMatrix(glowPivot, effectiveScale).storage);
