@@ -107,7 +107,10 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
 
   late final Ticker _ticker;
   late final FocusNode _keyboardFocusNode;
-  late _BoardAggregateScores _boardAggregateScores;
+  static const SoldierDesignPalette _playerFaction =
+      SoldierDesignPalette.yellow;
+
+  late final _BoardAggregateScores _boardAggregateScores;
   Duration? _lastElapsed;
   Offset _movementVector = Offset.zero;
   Offset _boardOffset = Offset.zero;
@@ -132,97 +135,37 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   final List<ui.Image> _redSlimeFrames = <ui.Image>[];
   bool _blueSlimeFramesLoadingStarted = false;
   final List<ui.Image> _blueSlimeFrames = <ui.Image>[];
-  final Set<String> _centerSoldierFramesLoadingStarted = <String>{};
-  final Map<SoldierDesignPalette, Map<_CenterSoldierFacing, List<ui.Image>>>
-  _centerSoldierFramesByFactionAndFacing =
-      <SoldierDesignPalette, Map<_CenterSoldierFacing, List<ui.Image>>>{
-        for (final SoldierDesignPalette faction in SoldierDesignPalette.values)
-          faction: <_CenterSoldierFacing, List<ui.Image>>{
-            for (final _CenterSoldierFacing facing
-                in _CenterSoldierFacing.values)
-              facing: <ui.Image>[],
-          },
+  final Set<_CenterSoldierFacing> _centerSoldierFramesLoadingStarted =
+      <_CenterSoldierFacing>{};
+  final Map<_CenterSoldierFacing, List<ui.Image>> _centerSoldierFramesByFacing =
+      <_CenterSoldierFacing, List<ui.Image>>{
+        for (final _CenterSoldierFacing facing in _CenterSoldierFacing.values)
+          facing: <ui.Image>[],
       };
-  final Map<
-    SoldierDesignPalette,
-    Map<_CenterSoldierFacing, _CenterSoldierFrameTuning>
-  >
-  _centerSoldierTuningsByFactionAndFacing =
-      <
-        SoldierDesignPalette,
-        Map<_CenterSoldierFacing, _CenterSoldierFrameTuning>
-      >{
-        SoldierDesignPalette.yellow:
-            <_CenterSoldierFacing, _CenterSoldierFrameTuning>{
-              _CenterSoldierFacing.right: const _CenterSoldierFrameTuning(
-                localX: 5.77,
-                localY: -3.24,
-                localScale: 1.04,
-              ),
-              _CenterSoldierFacing.left: const _CenterSoldierFrameTuning(
-                localX: 2.52,
-                localY: -3.60,
-                localScale: 1.09,
-              ),
-              _CenterSoldierFacing.back: const _CenterSoldierFrameTuning(
-                localX: 3.24,
-                localY: -3.96,
-                localScale: 1.00,
-              ),
-              _CenterSoldierFacing.front: const _CenterSoldierFrameTuning(
-                localX: 2.88,
-                localY: -3.96,
-                localScale: 1.00,
-              ),
-            },
-        SoldierDesignPalette.red:
-            <_CenterSoldierFacing, _CenterSoldierFrameTuning>{
-              _CenterSoldierFacing.right: const _CenterSoldierFrameTuning(
-                localX: 5.05,
-                localY: -3.60,
-                localScale: 1.10,
-              ),
-              _CenterSoldierFacing.left: const _CenterSoldierFrameTuning(
-                localX: 4.32,
-                localY: -3.24,
-                localScale: 1.09,
-              ),
-              _CenterSoldierFacing.back: const _CenterSoldierFrameTuning(
-                localX: 5.05,
-                localY: -2.88,
-                localScale: 1.16,
-              ),
-              _CenterSoldierFacing.front: const _CenterSoldierFrameTuning(
-                localX: 0.72,
-                localY: -3.60,
-                localScale: 1.06,
-              ),
-            },
-        SoldierDesignPalette.blue:
-            <_CenterSoldierFacing, _CenterSoldierFrameTuning>{
-              _CenterSoldierFacing.right: const _CenterSoldierFrameTuning(
-                localX: 6.13,
-                localY: -2.16,
-                localScale: 1.18,
-              ),
-              _CenterSoldierFacing.left: const _CenterSoldierFrameTuning(
-                localX: 2.52,
-                localY: -2.16,
-                localScale: 1.15,
-              ),
-              _CenterSoldierFacing.back: const _CenterSoldierFrameTuning(
-                localX: 4.32,
-                localY: -2.16,
-                localScale: 1.12,
-              ),
-              _CenterSoldierFacing.front: const _CenterSoldierFrameTuning(
-                localX: 3.24,
-                localY: -2.16,
-                localScale: 1.13,
-              ),
-            },
+  static const Map<_CenterSoldierFacing, _CenterSoldierFrameTuning>
+  _centerSoldierTuningsByFacing =
+      <_CenterSoldierFacing, _CenterSoldierFrameTuning>{
+        _CenterSoldierFacing.right: _CenterSoldierFrameTuning(
+          localX: 5.77,
+          localY: -3.24,
+          localScale: 1.04,
+        ),
+        _CenterSoldierFacing.left: _CenterSoldierFrameTuning(
+          localX: 2.52,
+          localY: -3.60,
+          localScale: 1.09,
+        ),
+        _CenterSoldierFacing.back: _CenterSoldierFrameTuning(
+          localX: 3.24,
+          localY: -3.96,
+          localScale: 1.00,
+        ),
+        _CenterSoldierFacing.front: _CenterSoldierFrameTuning(
+          localX: 2.88,
+          localY: -3.96,
+          localScale: 1.00,
+        ),
       };
-  SoldierDesignPalette _playerFaction = SoldierDesignPalette.yellow;
   _CenterSoldierFacing _centerSoldierFacing = _CenterSoldierFacing.front;
   bool _tigerLoseLoadingStarted = false;
   ui.Image? _tigerLoseImage;
@@ -309,7 +252,9 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
       _tigerLoseLoadingStarted = true;
       _loadTigerLose();
     }
-    _ensureCenterSoldierFramesLoaded(_centerSoldierFacing);
+    for (final _CenterSoldierFacing facing in _CenterSoldierFacing.values) {
+      _ensureCenterSoldierFramesLoaded(facing);
+    }
     if (!_tigerWinLoadingStarted) {
       _tigerWinLoadingStarted = true;
       _loadTigerWin();
@@ -394,35 +339,20 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     return _CenterSoldierFacing.left;
   }
 
-  String _centerSoldierLoadKey(
-    SoldierDesignPalette faction,
-    _CenterSoldierFacing facing,
-  ) => '${faction.name}:${facing.name}';
-
   void _ensureCenterSoldierFramesLoaded(_CenterSoldierFacing facing) {
-    _ensureCenterSoldierFramesLoadedForFaction(_playerFaction, facing);
-  }
-
-  void _ensureCenterSoldierFramesLoadedForFaction(
-    SoldierDesignPalette faction,
-    _CenterSoldierFacing facing,
-  ) {
-    final List<ui.Image> frames =
-        _centerSoldierFramesByFactionAndFacing[faction]![facing]!;
-    final String loadKey = _centerSoldierLoadKey(faction, facing);
+    final List<ui.Image> frames = _centerSoldierFramesByFacing[facing]!;
     if (frames.isNotEmpty ||
-        _centerSoldierFramesLoadingStarted.contains(loadKey)) {
+        _centerSoldierFramesLoadingStarted.contains(facing)) {
       return;
     }
-    _centerSoldierFramesLoadingStarted.add(loadKey);
-    _loadCenterSoldierFramesForFacing(faction, facing);
+    _centerSoldierFramesLoadingStarted.add(facing);
+    _loadCenterSoldierFramesForFacing(facing);
   }
 
   Future<void> _loadCenterSoldierFramesForFacing(
-    SoldierDesignPalette faction,
     _CenterSoldierFacing facing,
   ) async {
-    final String factionName = _centerSoldierFactionFolderName(faction);
+    final String factionName = _centerSoldierFactionFolderName(_playerFaction);
     final String facingName = _centerSoldierFacingFolderName(facing);
     final String folderName = 'player_${factionName}_${facingName}_sprite';
     final List<ui.Image> loaded = <ui.Image>[];
@@ -441,9 +371,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
         for (final ui.Image image in loaded) {
           image.dispose();
         }
-        _centerSoldierFramesLoadingStarted.remove(
-          _centerSoldierLoadKey(faction, facing),
-        );
+        _centerSoldierFramesLoadingStarted.remove(facing);
         if (kDebugMode) {
           debugPrint('Pseudo3DScene: failed loading $assetPath: $e');
           debugPrint('$st');
@@ -460,41 +388,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     }
 
     setState(() {
-      _centerSoldierFramesByFactionAndFacing[faction]![facing]!.addAll(loaded);
-    });
-  }
-
-  void _selectPlayerFaction(SoldierDesignPalette faction) {
-    if (_playerFaction == faction) {
-      return;
-    }
-    setState(() {
-      _playerFaction = faction;
-      _boardAggregateScores = _StrategicBoardScoring.buildAggregateScores(
-        _playerFaction,
-      );
-    });
-    _ensureCenterSoldierFramesLoadedForFaction(faction, _centerSoldierFacing);
-  }
-
-  _CenterSoldierFrameTuning _currentCenterSoldierTuning() =>
-      _centerSoldierTuningsByFactionAndFacing[_playerFaction]![_centerSoldierFacing]!;
-
-  void _updateCurrentCenterSoldierTuning({
-    double? localX,
-    double? localY,
-    double? localScale,
-  }) {
-    setState(() {
-      final Map<_CenterSoldierFacing, _CenterSoldierFrameTuning>
-      tuningsByFacing =
-          _centerSoldierTuningsByFactionAndFacing[_playerFaction]!;
-      tuningsByFacing[_centerSoldierFacing] =
-          tuningsByFacing[_centerSoldierFacing]!.copyWith(
-            localX: localX,
-            localY: localY,
-            localScale: localScale,
-          );
+      _centerSoldierFramesByFacing[facing]!.addAll(loaded);
     });
   }
 
@@ -1119,137 +1013,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
         SoldierDesignPalette.blue => const Offset(0, 2.8),
       };
 
-  Widget _buildFactionSwitcherPanel() {
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xCC09101E),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.28),
-                  blurRadius: 12,
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: SoldierDesignPalette.values
-                    .map(
-                      (SoldierDesignPalette faction) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: _FactionColorButton(
-                          faction: faction,
-                          isSelected: faction == _playerFaction,
-                          onTap: () => _selectPlayerFaction(faction),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _centerSoldierFacingLabel(_CenterSoldierFacing facing) =>
-      switch (facing) {
-        _CenterSoldierFacing.front => 'Front',
-        _CenterSoldierFacing.left => 'Left',
-        _CenterSoldierFacing.back => 'Back',
-        _CenterSoldierFacing.right => 'Right',
-      };
-
-  Widget _buildCenterSoldierTuningPanel() {
-    final _CenterSoldierFrameTuning tuning = _currentCenterSoldierTuning();
-    final String targetLabel =
-        '${_factionName(_playerFaction)} ${_centerSoldierFacingLabel(_centerSoldierFacing)}';
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 12),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xCC09101E),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.28),
-                  blurRadius: 12,
-                ),
-              ],
-            ),
-            child: SizedBox(
-              width: 220,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const Text(
-                      'Sprite Tune',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      targetLabel,
-                      style: TextStyle(
-                        color: _playerFaction.attackAccent,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _TuningSliderRow(
-                      label: 'Local X',
-                      value: tuning.localX,
-                      min: -80,
-                      max: 80,
-                      onChanged: (double value) =>
-                          _updateCurrentCenterSoldierTuning(localX: value),
-                    ),
-                    _TuningSliderRow(
-                      label: 'Local Y',
-                      value: tuning.localY,
-                      min: -80,
-                      max: 80,
-                      onChanged: (double value) =>
-                          _updateCurrentCenterSoldierTuning(localY: value),
-                    ),
-                    _TuningSliderRow(
-                      label: 'Scale',
-                      value: tuning.localScale,
-                      min: 0.4,
-                      max: 2.4,
-                      onChanged: (double value) =>
-                          _updateCurrentCenterSoldierTuning(localScale: value),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildScoreHud() {
     final List<_HudScorePanelModel> panels = _buildHudPanels();
     return IgnorePointer(
@@ -1296,12 +1059,9 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     for (final ui.Image image in _blueSlimeFrames) {
       image.dispose();
     }
-    for (final Map<_CenterSoldierFacing, List<ui.Image>> framesByFacing
-        in _centerSoldierFramesByFactionAndFacing.values) {
-      for (final List<ui.Image> frames in framesByFacing.values) {
-        for (final ui.Image image in frames) {
-          image.dispose();
-        }
+    for (final List<ui.Image> frames in _centerSoldierFramesByFacing.values) {
+      for (final ui.Image image in frames) {
+        image.dispose();
       }
     }
     _tigerLoseImage?.dispose();
@@ -1357,9 +1117,9 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
           final bool isSoldierMoving = _movementVector.distanceSquared > 1e-6;
           _ensureCenterSoldierFramesLoaded(_centerSoldierFacing);
           final _CenterSoldierFrameTuning currentTuning =
-              _currentCenterSoldierTuning();
+              _centerSoldierTuningsByFacing[_centerSoldierFacing]!;
           final List<ui.Image> centerSoldierFrames =
-              _centerSoldierFramesByFactionAndFacing[_playerFaction]?[_centerSoldierFacing] ??
+              _centerSoldierFramesByFacing[_centerSoldierFacing] ??
               const <ui.Image>[];
           final ui.Image? spritesheetFrame = centerSoldierFrames.isEmpty
               ? null
@@ -1562,36 +1322,30 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
             ],
           );
 
-          return Stack(
-            children: <Widget>[
-              Listener(
-                behavior: HitTestBehavior.translucent,
-                onPointerDown: (PointerDownEvent event) {
-                  if (!_keyboardFocusNode.hasFocus) {
-                    _keyboardFocusNode.requestFocus();
-                  }
-                  _onPointerDown(event);
-                },
-                onPointerMove: _onPointerMove,
-                onPointerUp: (_) => _onPointerEnd(),
-                onPointerCancel: (_) => _onPointerEnd(),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () {
-                    if (!_keyboardFocusNode.hasFocus) {
-                      _keyboardFocusNode.requestFocus();
-                    }
-                  },
-                  onScaleStart: _onScaleStart,
-                  onScaleUpdate: (ScaleUpdateDetails details) =>
-                      _onScaleUpdate(details, size),
-                  onScaleEnd: _onScaleEnd,
-                  child: sceneStack,
-                ),
-              ),
-              Positioned.fill(child: _buildCenterSoldierTuningPanel()),
-              Positioned.fill(child: _buildFactionSwitcherPanel()),
-            ],
+          return Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (PointerDownEvent event) {
+              if (!_keyboardFocusNode.hasFocus) {
+                _keyboardFocusNode.requestFocus();
+              }
+              _onPointerDown(event);
+            },
+            onPointerMove: _onPointerMove,
+            onPointerUp: (_) => _onPointerEnd(),
+            onPointerCancel: (_) => _onPointerEnd(),
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                if (!_keyboardFocusNode.hasFocus) {
+                  _keyboardFocusNode.requestFocus();
+                }
+              },
+              onScaleStart: _onScaleStart,
+              onScaleUpdate: (ScaleUpdateDetails details) =>
+                  _onScaleUpdate(details, size),
+              onScaleEnd: _onScaleEnd,
+              child: sceneStack,
+            ),
           );
         },
       ),
@@ -1694,107 +1448,6 @@ class _CenterSoldierSpritesheetBody extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _FactionColorButton extends StatelessWidget {
-  const _FactionColorButton({
-    required this.faction,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final SoldierDesignPalette faction;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color color = faction.attackAccent;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Ink(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color,
-            border: Border.all(
-              color: isSelected
-                  ? Colors.white.withValues(alpha: 0.95)
-                  : Colors.white.withValues(alpha: 0.26),
-              width: isSelected ? 3 : 1.4,
-            ),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: color.withValues(alpha: isSelected ? 0.45 : 0.24),
-                blurRadius: isSelected ? 14 : 9,
-                spreadRadius: isSelected ? 1 : 0,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TuningSliderRow extends StatelessWidget {
-  const _TuningSliderRow({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-  });
-
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Text(
-                value.toStringAsFixed(2),
-                style: const TextStyle(
-                  color: Color(0xFFF7FBFF),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          Slider(
-            value: value.clamp(min, max),
-            min: min,
-            max: max,
-            onChanged: onChanged,
-          ),
-        ],
-      ),
     );
   }
 }
