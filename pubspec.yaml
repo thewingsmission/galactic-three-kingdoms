@@ -68,6 +68,19 @@ flutter:
 
   assets:
     - image/
+    - image/player/
+    - image/player/player_blue_back_sprite/
+    - image/player/player_blue_front_sprite/
+    - image/player/player_blue_left_sprite/
+    - image/player/player_blue_right_sprite/
+    - image/player/player_red_back_sprite/
+    - image/player/player_red_front_sprite/
+    - image/player/player_red_left_sprite/
+    - image/player/player_red_right_sprite/
+    - image/player/player_yellow_back_sprite/
+    - image/player/player_yellow_front_sprite/
+    - image/player/player_yellow_left_sprite/
+    - image/player/player_yellow_right_sprite/
     - image/spritesheet/
     - image/button_attack.png
     - image/button_defense.png
