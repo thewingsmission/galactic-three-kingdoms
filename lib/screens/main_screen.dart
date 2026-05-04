@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../models/game_session_state.dart';
 import '../models/soldier_design_palette.dart';
 import '../models/soldier_faction_color_theme.dart';
 import '../widgets/pseudo3d_scene.dart';
@@ -12,11 +13,13 @@ import '../widgets/pseudo3d_scene.dart';
 class MainScreen extends StatefulWidget {
   const MainScreen({
     super.key,
+    required this.session,
     required this.onOpenInventory,
     required this.onOpenWar,
     required this.onOpenDesigns,
   });
 
+  final GameSessionState session;
   final VoidCallback onOpenInventory;
   final VoidCallback onOpenWar;
   final VoidCallback onOpenDesigns;
@@ -46,6 +49,7 @@ class _MainScreenState extends State<MainScreen> {
           Positioned.fill(
             child: SafeArea(
               child: Pseudo3DScene(
+                session: widget.session,
                 meshMode: Pseudo3DMeshMode.outlineHalfTransparent,
                 boardBottomInset: 0,
                 viewportHeightFactor: 0.92,

@@ -36,6 +36,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   flame: ^1.35.1
   flame_forge2d: ^0.19.2+4
+  firebase_core: ^4.7.0
+  cloud_firestore: ^6.3.0
 
 dev_dependencies:
   flutter_test:
@@ -52,7 +54,7 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "image/icon.png"
+  image_path: "image/galactic_three_kingdoms_icon.png"
   remove_alpha_ios: true
 
 # For information on the generic Dart part of this file, see the
@@ -85,7 +87,6 @@ flutter:
     - image/button_attack.png
     - image/button_defense.png
     - image/button_target.png
-    - image/icon.png
     - image/The Wings Mission Logo (white).png
 
   # An image asset can refer to one or more resolution-specific "variants", see

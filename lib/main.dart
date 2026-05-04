@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,10 +12,14 @@ import 'screens/war_screen.dart';
 
 Route<T> _instantRoute<T>(Widget child) {
   return PageRouteBuilder<T>(
-    pageBuilder: (BuildContext context, Animation<double> animation,
-        Animation<double> secondaryAnimation) {
-      return child;
-    },
+    pageBuilder:
+        (
+          BuildContext context,
+          Animation<double> animation,
+          Animation<double> secondaryAnimation,
+        ) {
+          return child;
+        },
     transitionDuration: Duration.zero,
     reverseTransitionDuration: Duration.zero,
   );
@@ -22,6 +27,7 @@ Route<T> _instantRoute<T>(Widget child) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
@@ -66,6 +72,7 @@ class _AppFlowState extends State<AppFlow> {
     _navigatorKey.currentState?.pushReplacement<void, void>(
       _instantRoute<void>(
         MainScreen(
+          session: _session,
           onOpenInventory: _openInventory,
           onOpenWar: _openWar,
           onOpenDesigns: _openDesigns,
@@ -76,9 +83,7 @@ class _AppFlowState extends State<AppFlow> {
 
   Future<void> _openInventory() async {
     await _navigatorKey.currentState?.push<void>(
-      _instantRoute<void>(
-        InventoryScreen(session: _session),
-      ),
+      _instantRoute<void>(InventoryScreen(session: _session)),
     );
   }
 
@@ -88,10 +93,11 @@ class _AppFlowState extends State<AppFlow> {
 
     final deployment = _session.buildDeployment();
     if (deployment.soldiers.isEmpty) {
-      final BuildContext? screenContext = navigator.context;
-      if (screenContext == null) return;
+      final BuildContext screenContext = navigator.context;
       ScaffoldMessenger.of(screenContext).showSnackBar(
-        const SnackBar(content: Text('Select at least one soldier in Inventory first.')),
+        const SnackBar(
+          content: Text('Select at least one soldier in Inventory first.'),
+        ),
       );
       return;
     }
@@ -107,13 +113,12 @@ class _AppFlowState extends State<AppFlow> {
   }
 
   Future<void> _openDesigns() async {
-    final SoldierDesignPalette? result = await _navigatorKey.currentState?.push<SoldierDesignPalette>(
-      _instantRoute<SoldierDesignPalette>(
-        SoldierDesignScreen(
-          initialPalette: _session.palette,
-        ),
-      ),
-    );
+    final SoldierDesignPalette? result = await _navigatorKey.currentState
+        ?.push<SoldierDesignPalette>(
+          _instantRoute<SoldierDesignPalette>(
+            SoldierDesignScreen(initialPalette: _session.palette),
+          ),
+        );
     if (result != null) {
       setState(() => _session.palette = result);
     }
@@ -125,7 +130,10 @@ class _AppFlowState extends State<AppFlow> {
       key: _navigatorKey,
       onGenerateRoute: (RouteSettings settings) {
         return _instantRoute<void>(
-          SplashScreen(onFinished: _showMainScreen),
+          SplashScreen(
+            onInitialize: _session.loadCellScores,
+            onFinished: _showMainScreen,
+          ),
         );
       },
     );

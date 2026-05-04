@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyAnWzG4pon_0h5tGcDB4UBUzg8SSJ7ceyM</string>
+	<key>GCM_SENDER_ID</key>
+	<string>496735251073</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.thewingsmission.galacticthreekingdoms</string>
+	<key>PROJECT_ID</key>
+	<string>galactic-three-kingdoms</string>
+	<key>STORAGE_BUCKET</key>
+	<string>galactic-three-kingdoms.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:496735251073:ios:e5f2271bcd095870a2bb80</string>
+</dict>
+</plist>

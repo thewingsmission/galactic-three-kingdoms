@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "496735251073",
+    "project_id": "galactic-three-kingdoms",
+    "storage_bucket": "galactic-three-kingdoms.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:496735251073:android:8a48c149ca61a18ca2bb80",
+        "android_client_info": {
+          "package_name": "com.thewingsmission.galacticthreekingdoms"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB3YZkwnBHreOHHqV9UhCEtU5UjggUrUHk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

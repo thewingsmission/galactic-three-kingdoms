@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 export '../models/level4_war_vfx.dart';
 
 import '../models/cell_core_palette.dart';
+import '../models/game_session_state.dart';
 import '../models/hex_cell_preview_style.dart';
 import '../models/level4_war_vfx.dart';
 import '../models/soldier_design.dart';
@@ -22,6 +23,7 @@ import 'soldier_design_catalog.dart';
 class Pseudo3DScene extends StatefulWidget {
   const Pseudo3DScene({
     super.key,
+    required this.session,
     this.meshMode = Pseudo3DMeshMode.solid,
     this.boardBottomInset = 0,
     this.viewportHeightFactor = 0.72,
@@ -33,6 +35,7 @@ class Pseudo3DScene extends StatefulWidget {
     this.onHudVisibilityChanged,
   });
 
+  final GameSessionState session;
   final Pseudo3DMeshMode meshMode;
   final double boardBottomInset;
   final double viewportHeightFactor;
@@ -188,6 +191,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   void initState() {
     super.initState();
     _boardAggregateScores = _StrategicBoardScoring.buildAggregateScores(
+      widget.session,
       _playerFaction,
     );
     _keyboardFocusNode = FocusNode(debugLabel: 'Pseudo3DSceneKeyboardFocus');
@@ -768,6 +772,26 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     );
   }
 
+  (int, int) _axialOfLocalCenter(Offset localCenter) {
+    final int q = (localCenter.dx / (_Pseudo3DBoardPainter._baseRadius * 1.5))
+        .round();
+    final int r =
+        ((localCenter.dy / (_Pseudo3DBoardPainter._baseRadius * math.sqrt(3))) -
+                q / 2)
+            .round();
+    return (q, r);
+  }
+
+  Map<SoldierDesignPalette, int> _scoresForLocalCenter(Offset localCenter) {
+    final (int q, int r) = _axialOfLocalCenter(localCenter);
+    return widget.session.scoresForCell(q, r);
+  }
+
+  SoldierDesignPalette _ownerForLocalCenter(Offset localCenter) {
+    final (int q, int r) = _axialOfLocalCenter(localCenter);
+    return widget.session.ownerForCell(q, r);
+  }
+
   List<_HudScorePanelModel> _buildHudPanels() {
     final Offset? localCenter = _scorePanelCellLocalCenter;
     if (localCenter == null) {
@@ -802,6 +826,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
       title: 'Kingdom Dominion',
       subtitle: 'Three Kingdoms score surge',
       themeFaction: order.first,
+      session: widget.session,
       rows: rows,
       panelIcon: _HudPanelIconData(
         assetPath: _joystickKnobAssetPath(order.first),
@@ -812,23 +837,10 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   }
 
   _HudScorePanelModel _buildCellScorePanel(Offset localCenter) {
-    final ({double red, double yellow, double blue}) influence =
-        _StrategicBoardScoring.territoryInfluenceScores(localCenter);
-    final Map<SoldierDesignPalette, int> cellScores =
-        <SoldierDesignPalette, int>{
-          SoldierDesignPalette.red: _StrategicBoardScoring.influencePoints(
-            influence.red,
-          ),
-          SoldierDesignPalette.yellow: _StrategicBoardScoring.influencePoints(
-            influence.yellow,
-          ),
-          SoldierDesignPalette.blue: _StrategicBoardScoring.influencePoints(
-            influence.blue,
-          ),
-        };
-    final SoldierDesignPalette owner = _StrategicBoardScoring.territoryFaction(
+    final Map<SoldierDesignPalette, int> cellScores = _scoresForLocalCenter(
       localCenter,
     );
+    final SoldierDesignPalette owner = _ownerForLocalCenter(localCenter);
     final Map<SoldierDesignPalette, int> deltas = _buildCellTrendMap(
       localCenter,
       cellScores,
@@ -1174,6 +1186,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                     height: viewportHeight,
                     child: CustomPaint(
                       painter: _Pseudo3DBoardPainter(
+                        session: widget.session,
                         boardOffset: clampedOffset,
                         meshMode: widget.meshMode,
                         zoom: _zoom,
@@ -1230,6 +1243,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                     height: viewportHeight,
                     child: CustomPaint(
                       painter: _Pseudo3DBoardPainter(
+                        session: widget.session,
                         boardOffset: clampedOffset,
                         meshMode: widget.meshMode,
                         zoom: _zoom,
@@ -1264,6 +1278,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                     height: viewportHeight,
                     child: CustomPaint(
                       painter: _Pseudo3DBoardPainter(
+                        session: widget.session,
                         boardOffset: clampedOffset,
                         meshMode: widget.meshMode,
                         zoom: _zoom,
@@ -1458,6 +1473,7 @@ enum _BoardPaintLayer { hexMesh, shadowHighlight, warEffects }
 
 class _Pseudo3DBoardPainter extends CustomPainter {
   _Pseudo3DBoardPainter({
+    required this.session,
     required this.boardOffset,
     required this.meshMode,
     required this.zoom,
@@ -1478,6 +1494,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     required this.paintLayer,
   });
 
+  final GameSessionState session;
   final Offset boardOffset;
   final Pseudo3DMeshMode meshMode;
   final double zoom;
@@ -2171,6 +2188,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   ({Color outer, Color inner}) _territoryPalette(Offset center) {
     int tierForLevel(int level) {
       return switch (level) {
+        5 => 1,
         4 => 1,
         3 => 2,
         2 => 3,
@@ -2201,26 +2219,13 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   }
 
   SoldierDesignPalette _territoryFaction(Offset center) {
-    return _StrategicBoardScoring.territoryFaction(center);
+    final (int q, int r) = _StrategicBoardScoring._axialOf(center);
+    return session.ownerForCell(q, r);
   }
 
-  /// Per-cell (stable) strength: **60%** L1, **25%** L2, **12%** L3, **3%** L4.
-  static int _strengthLevel(Offset localCenter) {
-    final int q = (localCenter.dx / (_baseRadius * 1.5)).round();
-    final int r = ((localCenter.dy / (_baseRadius * math.sqrt(3))) - q / 2)
-        .round();
-    final int hash = ((q * 92821) ^ (r * 68917) ^ 0x5A17) & 0x7fffffff;
-    final int bucket = hash % 100;
-    if (bucket < 60) {
-      return 1;
-    }
-    if (bucket < 85) {
-      return 2;
-    }
-    if (bucket < 97) {
-      return 3;
-    }
-    return 4;
+  int _strengthLevel(Offset localCenter) {
+    final (int q, int r) = _StrategicBoardScoring._axialOf(localCenter);
+    return session.levelForCell(q, r);
   }
 
   bool _isWarCell(Offset localCenter, SoldierDesignPalette faction) {
@@ -2505,7 +2510,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _Pseudo3DBoardPainter oldDelegate) {
-    return oldDelegate.boardOffset != boardOffset ||
+    return oldDelegate.session != session ||
+        oldDelegate.boardOffset != boardOffset ||
         oldDelegate.meshMode != meshMode ||
         oldDelegate.zoom != zoom ||
         oldDelegate.effectT != effectT ||
@@ -2657,56 +2663,12 @@ class _HexAxial {
 }
 
 class _StrategicBoardScoring {
-  static ({double red, double yellow, double blue}) territoryInfluenceScores(
-    Offset center,
-  ) {
-    final Offset n = Offset(
-      (center.dx / (_Pseudo3DBoardPainter._landExtentX * 2)) + 0.5,
-      (center.dy / (_Pseudo3DBoardPainter.landExtentY * 2)) + 0.5,
-    );
-
-    double score(Offset seed, double weight) {
-      final double dx = n.dx - seed.dx;
-      final double dy = n.dy - seed.dy;
-      final double distance2 = dx * dx + dy * dy;
-      return weight - distance2;
-    }
-
-    final double red =
-        score(const Offset(0.16, 0.38), 0.9) + math.sin(n.dy * 9.5) * 0.03;
-    final double yellow =
-        score(const Offset(0.5, 0.48), 0.86) +
-        math.cos((n.dx + n.dy) * 8.5) * 0.035;
-    final double blue =
-        score(const Offset(0.82, 0.42), 0.92) + math.sin(n.dx * 10.0) * 0.03;
-    return (red: red, yellow: yellow, blue: blue);
-  }
-
-  static SoldierDesignPalette territoryFaction(Offset center) {
-    final ({double red, double yellow, double blue}) scores =
-        territoryInfluenceScores(center);
-    if (scores.red >= scores.yellow && scores.red >= scores.blue) {
-      return SoldierDesignPalette.red;
-    }
-    if (scores.yellow >= scores.red && scores.yellow >= scores.blue) {
-      return SoldierDesignPalette.yellow;
-    }
-    return SoldierDesignPalette.blue;
-  }
-
-  static int influencePoints(double rawScore) {
-    return ((rawScore + 0.2) * 100).round().clamp(0, 99);
-  }
-
   static _BoardAggregateScores buildAggregateScores(
+    GameSessionState session,
     SoldierDesignPalette playerFaction,
   ) {
-    final Map<SoldierDesignPalette, int> countryCellCounts =
-        <SoldierDesignPalette, int>{
-          for (final SoldierDesignPalette faction
-              in SoldierDesignPalette.values)
-            faction: 0,
-        };
+    final Map<SoldierDesignPalette, int> countryCellCounts = session
+        .ownedCellCounts();
     final Map<SoldierDesignPalette, int> enemyKillsByFaction =
         <SoldierDesignPalette, int>{
           for (final SoldierDesignPalette faction
@@ -2720,22 +2682,22 @@ class _StrategicBoardScoring {
 
     for (final Offset localCenter
         in _Pseudo3DBoardPainter._baseLandTileCenters) {
-      final SoldierDesignPalette faction = territoryFaction(localCenter);
-      countryCellCounts[faction] = (countryCellCounts[faction] ?? 0) + 1;
+      final (int q, int r) = _axialOf(localCenter);
+      final SoldierDesignPalette faction = session.ownerForCell(q, r);
 
       if (faction != playerFaction) {
         continue;
       }
 
-      final int level = _Pseudo3DBoardPainter._strengthLevel(localCenter);
+      final int level = session.levelForCell(q, r);
       moneyCollected += 12 + level * 5;
 
-      final (int q, int r) = _axialOf(localCenter);
       if (!_Pseudo3DBoardPainter._isBoundaryWarVfxSlot(q, r)) {
         continue;
       }
 
       for (final SoldierDesignPalette enemy in _enemyNeighborsOf(
+        session,
         localCenter,
         faction,
       )) {
@@ -2779,6 +2741,7 @@ class _StrategicBoardScoring {
   }
 
   static Set<SoldierDesignPalette> _enemyNeighborsOf(
+    GameSessionState session,
     Offset localCenter,
     SoldierDesignPalette faction,
   ) {
@@ -2798,9 +2761,8 @@ class _StrategicBoardScoring {
       if (neighborCenter == null) {
         continue;
       }
-      final SoldierDesignPalette neighborFaction = territoryFaction(
-        neighborCenter,
-      );
+      final (int nq, int nr) = _axialOf(neighborCenter);
+      final SoldierDesignPalette neighborFaction = session.ownerForCell(nq, nr);
       if (neighborFaction != faction) {
         enemies.add(neighborFaction);
       }
@@ -2852,6 +2814,7 @@ class _HudScorePanelModel {
     this.subtitle,
     this.heroStats,
     this.panelIcon,
+    this.session,
   });
 
   final _HudPanelKind kind;
@@ -2861,6 +2824,7 @@ class _HudScorePanelModel {
   final List<_HudScoreRowModel> rows;
   final _HudHeroStats? heroStats;
   final _HudPanelIconData? panelIcon;
+  final GameSessionState? session;
 }
 
 class _HudPanelIconData {
@@ -2993,6 +2957,7 @@ class _HudKingdomPanelBody extends StatelessWidget {
               height: 41,
               child: CustomPaint(
                 painter: _HudKingdomMinimapPainter(
+                  session: model.session!,
                   themeFaction: model.themeFaction,
                 ),
               ),
@@ -3388,8 +3353,12 @@ class _HudRarityChip extends StatelessWidget {
 }
 
 class _HudKingdomMinimapPainter extends CustomPainter {
-  _HudKingdomMinimapPainter({required this.themeFaction});
+  _HudKingdomMinimapPainter({
+    required this.session,
+    required this.themeFaction,
+  });
 
+  final GameSessionState session;
   final SoldierDesignPalette themeFaction;
 
   @override
@@ -3417,10 +3386,16 @@ class _HudKingdomMinimapPainter extends CustomPainter {
 
     for (final Offset localCenter
         in _Pseudo3DBoardPainter._baseLandTileCenters) {
-      final SoldierDesignPalette faction =
-          _StrategicBoardScoring.territoryFaction(localCenter);
-      final int level = _Pseudo3DBoardPainter._strengthLevel(localCenter);
-      final int tier = 5 - level;
+      final (int q, int r) = _StrategicBoardScoring._axialOf(localCenter);
+      final SoldierDesignPalette faction = session.ownerForCell(q, r);
+      final int level = session.levelForCell(q, r);
+      final int tier = switch (level) {
+        5 => 1,
+        4 => 1,
+        3 => 2,
+        2 => 3,
+        _ => 4,
+      };
       final double nx = (localCenter.dx - minX) / width;
       final double ny = (localCenter.dy - minY) / height;
       final Offset p = Offset(4 + nx * usableW, 4 + (1 - ny) * usableH);
@@ -3434,7 +3409,8 @@ class _HudKingdomMinimapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HudKingdomMinimapPainter oldDelegate) {
-    return oldDelegate.themeFaction != themeFaction;
+    return oldDelegate.themeFaction != themeFaction ||
+        oldDelegate.session != session;
   }
 }
 

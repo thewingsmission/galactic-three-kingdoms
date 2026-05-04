@@ -43,10 +43,11 @@ class CellCorePalette {
   final Color componentIndex3;
 
   /// Inner hex hole: `lerp([base], #02040A, 0.45)` @ α 0.1 (default [base] = [componentIndex1]).
-  Color innerHexHolePaintFrom(Color base) =>
-      Color.lerp(base, const Color(0xFF02040A), 0.45)!.withValues(
-            alpha: (1 - innerHexHoleTransparency).clamp(0.0, 1.0),
-          );
+  Color innerHexHolePaintFrom(Color base) => Color.lerp(
+    base,
+    const Color(0xFF02040A),
+    0.45,
+  )!.withValues(alpha: (1 - innerHexHoleTransparency).clamp(0.0, 1.0));
 
   Color get innerHexHolePaint => innerHexHolePaintFrom(componentIndex1);
 
@@ -61,6 +62,7 @@ class CellCorePalette {
   }) {
     int tierForLevel(int level) {
       return switch (level) {
+        5 => 1,
         4 => 1,
         3 => 2,
         2 => 3,

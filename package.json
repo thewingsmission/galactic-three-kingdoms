@@ -1,0 +1,29 @@
+{
+  "name": "galactic-three-kingdoms---epic-saga",
+  "version": "1.0.0",
+  "description": "A new Flutter project.",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "seed:cell-scores": "node scripts/seed_cell_scores.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thewingsmission/galactic-three-kingdoms.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/thewingsmission/galactic-three-kingdoms/issues"
+  },
+  "homepage": "https://github.com/thewingsmission/galactic-three-kingdoms#readme",
+  "dependencies": {
+    "firebase-admin": "^13.8.0"
+  }
+}
