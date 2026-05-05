@@ -102,6 +102,8 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   static const double _soldierAnchorScreenYOffsetFactor = 0.15;
   static const double _markerBoxSize = 84;
   static const double _touchHoldControlRadius = 110;
+  static const double _dynamicJoystickBaseRadius = 34;
+  static const double _dynamicJoystickKnobRadius = 22;
   static const double _minZoom = 0.7;
   static const double _maxZoom = 1.8;
   static const double _keyboardZoomStep = 0.08;
@@ -118,7 +120,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   Offset _movementVector = Offset.zero;
   Offset _boardOffset = Offset.zero;
   Size _viewportSize = Size.zero;
-  Size _sceneSize = Size.zero;
   double _shadowAnchorWorldY = 0;
   double _effectT = 0;
   double _zoom = 1;
@@ -186,6 +187,8 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   Offset? _scorePanelCellLocalCenter;
   double _trackedShadowCellEnteredAtSec = 0;
   bool _showScorePanel = false;
+  Offset? _dynamicJoystickBaseCenter;
+  Offset? _dynamicJoystickKnobCenter;
 
   @override
   void initState() {
@@ -626,16 +629,22 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     return (a - b).distanceSquared < 1.0;
   }
 
-  void _beginTouchHoldMovement(Offset localPosition, Size size) {
-    _updateTouchHoldVector(localPosition, size);
+  void _beginTouchHoldMovement(Offset localPosition) {
+    _dynamicJoystickBaseCenter = localPosition;
+    _dynamicJoystickKnobCenter = localPosition;
+    _updateTouchHoldVector(localPosition);
   }
 
-  void _updateTouchHoldMovement(Offset localPosition, Size size) {
-    _updateTouchHoldVector(localPosition, size);
+  void _updateTouchHoldMovement(Offset localPosition) {
+    _updateTouchHoldVector(localPosition);
   }
 
   void _endTouchHoldMovement() {
-    setState(() => _movementVector = Offset.zero);
+    setState(() {
+      _movementVector = Offset.zero;
+      _dynamicJoystickBaseCenter = null;
+      _dynamicJoystickKnobCenter = null;
+    });
   }
 
   void _onScaleStart(ScaleStartDetails details) {
@@ -659,7 +668,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   void _onPointerDown(PointerDownEvent event) {
     _activePointerCount += 1;
     if (_activePointerCount == 1) {
-      _beginTouchHoldMovement(event.localPosition, _sceneSize);
+      _beginTouchHoldMovement(event.localPosition);
     } else {
       _endTouchHoldMovement();
     }
@@ -667,7 +676,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
 
   void _onPointerMove(PointerMoveEvent event) {
     if (_activePointerCount == 1) {
-      _updateTouchHoldMovement(event.localPosition, _sceneSize);
+      _updateTouchHoldMovement(event.localPosition);
     }
   }
 
@@ -741,13 +750,16 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     return KeyEventResult.ignored;
   }
 
-  void _updateTouchHoldVector(Offset localPosition, Size size) {
-    final Offset shadowCenter = _shadowCenterInScene(size);
-    Offset delta = localPosition - shadowCenter;
+  void _updateTouchHoldVector(Offset localPosition) {
+    final Offset baseCenter = _dynamicJoystickBaseCenter ?? localPosition;
+    Offset delta = localPosition - baseCenter;
     if (delta.distance > _touchHoldControlRadius && delta.distance > 0) {
       delta = delta * (_touchHoldControlRadius / delta.distance);
     }
+    final Offset knobCenter = baseCenter + delta;
     setState(() {
+      _dynamicJoystickBaseCenter = baseCenter;
+      _dynamicJoystickKnobCenter = knobCenter;
       _movementVector = Offset(
         delta.dx / _touchHoldControlRadius,
         delta.dy / _touchHoldControlRadius,
@@ -757,19 +769,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
         _ensureCenterSoldierFramesLoaded(_centerSoldierFacing);
       }
     });
-  }
-
-  Offset _shadowCenterInScene(Size size) {
-    final double totalScreenHeight = size.height + widget.boardBottomInset;
-    return Offset(
-      size.width / 2,
-      totalScreenHeight / 2 +
-          totalScreenHeight * _soldierAnchorScreenYOffsetFactor +
-          _CenterSoldierSpritesheetMetrics.shadowCenterOffsetFromMarkerCenter(
-                _markerBoxSize,
-              ) *
-              _zoom,
-    );
   }
 
   (int, int) _axialOfLocalCenter(Offset localCenter) {
@@ -1094,7 +1093,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           final Size size = Size(constraints.maxWidth, constraints.maxHeight);
-          _sceneSize = size;
 
           final double boardLayoutHeight = math.max(
             0.0,
@@ -1192,6 +1190,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         zoom: _zoom,
                         effectT: _effectT,
                         shadowAnchorWorldY: _shadowAnchorWorldY,
+                        soldierScreenY: shadowCenterViewportY,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -1249,6 +1248,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         zoom: _zoom,
                         effectT: _effectT,
                         shadowAnchorWorldY: _shadowAnchorWorldY,
+                        soldierScreenY: shadowCenterViewportY,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -1284,6 +1284,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         zoom: _zoom,
                         effectT: _effectT,
                         shadowAnchorWorldY: _shadowAnchorWorldY,
+                        soldierScreenY: shadowCenterViewportY,
                         yellowSlimeFrames: _yellowSlimeFrames,
                         fireYellowFrames: _fireYellowFrames,
                         tornadoRedFrames: _tornadoRedFrames,
@@ -1296,7 +1297,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         eagleWinImage: _eagleWinImage,
                         dragonLoseImage: _dragonLoseImage,
                         dragonWinImage: _dragonWinImage,
-                        paintLayer: _BoardPaintLayer.warEffects,
+                        paintLayer: _BoardPaintLayer.warEffectsBehindSoldier,
                       ),
                     ),
                   ),
@@ -1330,6 +1331,52 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                         ),
                       ),
                     ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: widget.boardBottomInset,
+                child: Center(
+                  child: SizedBox(
+                    width: viewportWidth,
+                    height: viewportHeight,
+                    child: CustomPaint(
+                      painter: _Pseudo3DBoardPainter(
+                        session: widget.session,
+                        boardOffset: clampedOffset,
+                        meshMode: widget.meshMode,
+                        zoom: _zoom,
+                        effectT: _effectT,
+                        shadowAnchorWorldY: _shadowAnchorWorldY,
+                        soldierScreenY: shadowCenterViewportY,
+                        yellowSlimeFrames: _yellowSlimeFrames,
+                        fireYellowFrames: _fireYellowFrames,
+                        tornadoRedFrames: _tornadoRedFrames,
+                        tornadoIceFrames: _tornadoIceFrames,
+                        redSlimeFrames: _redSlimeFrames,
+                        blueSlimeFrames: _blueSlimeFrames,
+                        tigerLoseImage: _tigerLoseImage,
+                        tigerWinImage: _tigerWinImage,
+                        eagleLoseImage: _eagleLoseImage,
+                        eagleWinImage: _eagleWinImage,
+                        dragonLoseImage: _dragonLoseImage,
+                        dragonWinImage: _dragonWinImage,
+                        paintLayer: _BoardPaintLayer.warEffectsInFrontOfSoldier,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: _DynamicJoystickOverlay(
+                    baseCenter: _dynamicJoystickBaseCenter,
+                    knobCenter: _dynamicJoystickKnobCenter,
+                    baseRadius: _dynamicJoystickBaseRadius,
+                    knobRadius: _dynamicJoystickKnobRadius,
                   ),
                 ),
               ),
@@ -1408,6 +1455,65 @@ class _CenterSoldierShadow extends StatelessWidget {
   }
 }
 
+class _DynamicJoystickOverlay extends StatelessWidget {
+  const _DynamicJoystickOverlay({
+    required this.baseCenter,
+    required this.knobCenter,
+    required this.baseRadius,
+    required this.knobRadius,
+  });
+
+  final Offset? baseCenter;
+  final Offset? knobCenter;
+  final double baseRadius;
+  final double knobRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    if (baseCenter == null || knobCenter == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Stack(
+      children: <Widget>[
+        Positioned(
+          left: baseCenter!.dx - baseRadius,
+          top: baseCenter!.dy - baseRadius,
+          child: Container(
+            width: baseRadius * 2,
+            height: baseRadius * 2,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0x22000000),
+              border: Border.all(color: const Color(0x88FFFFFF), width: 2),
+            ),
+          ),
+        ),
+        Positioned(
+          left: knobCenter!.dx - knobRadius,
+          top: knobCenter!.dy - knobRadius,
+          child: Container(
+            width: knobRadius * 2,
+            height: knobRadius * 2,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xCCFFFFFF),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x40000000),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+              border: Border.all(color: const Color(0xAA1A1A1A), width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _CenterSoldierSpritesheetBody extends StatelessWidget {
   const _CenterSoldierSpritesheetBody({
     required this.frame,
@@ -1468,8 +1574,14 @@ class _CenterSoldierSpritesheetBody extends StatelessWidget {
 }
 
 /// Hex fills vs shadow rim vs war VFX composite in separate layers: mesh first,
-/// then shadow footprint (above all cells), then slime/tornado/mascot overlays.
-enum _BoardPaintLayer { hexMesh, shadowHighlight, warEffects }
+/// then shadow footprint, then war effects behind the soldier, then the soldier,
+/// then war effects in front of the soldier.
+enum _BoardPaintLayer {
+  hexMesh,
+  shadowHighlight,
+  warEffectsBehindSoldier,
+  warEffectsInFrontOfSoldier,
+}
 
 class _Pseudo3DBoardPainter extends CustomPainter {
   _Pseudo3DBoardPainter({
@@ -1479,6 +1591,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     required this.zoom,
     required this.effectT,
     required this.shadowAnchorWorldY,
+    required this.soldierScreenY,
     required this.yellowSlimeFrames,
     required this.fireYellowFrames,
     required this.tornadoRedFrames,
@@ -1499,6 +1612,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
   final Pseudo3DMeshMode meshMode;
   final double zoom;
   final double effectT;
+  final double soldierScreenY;
 
   /// World Y solved so the soldier shadow sits on the map; used to find the stepped-on hex.
   final double shadowAnchorWorldY;
@@ -1611,7 +1725,8 @@ class _Pseudo3DBoardPainter extends CustomPainter {
     final double margin = switch (paintLayer) {
       _BoardPaintLayer.hexMesh => _hexMeshCullMargin,
       _BoardPaintLayer.shadowHighlight => _shadowHighlightCullMargin,
-      _BoardPaintLayer.warEffects => _warEffectsCullMargin,
+      _BoardPaintLayer.warEffectsBehindSoldier => _warEffectsCullMargin,
+      _BoardPaintLayer.warEffectsInFrontOfSoldier => _warEffectsCullMargin,
     };
     return Rect.fromLTWH(0, 0, size.width, size.height).inflate(margin);
   }
@@ -1660,7 +1775,14 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         40.0,
         polygon.strokeScale * 28.0,
       ),
-      _BoardPaintLayer.warEffects => math.max(96.0, polygon.outerRadius * 0.9),
+      _BoardPaintLayer.warEffectsBehindSoldier => math.max(
+        96.0,
+        polygon.outerRadius * 0.9,
+      ),
+      _BoardPaintLayer.warEffectsInFrontOfSoldier => math.max(
+        96.0,
+        polygon.outerRadius * 0.9,
+      ),
     };
     return polygon.path.getBounds().inflate(extra);
   }
@@ -1960,10 +2082,18 @@ class _Pseudo3DBoardPainter extends CustomPainter {
             );
           }
         }
-      } else if (paintLayer == _BoardPaintLayer.warEffects &&
+      } else if ((paintLayer == _BoardPaintLayer.warEffectsBehindSoldier ||
+              paintLayer == _BoardPaintLayer.warEffectsInFrontOfSoldier) &&
           polygon.isWarCell &&
           _shouldShowBoundaryWarVfx(polygon)) {
-        _paintSlimeLose(canvas, polygon);
+        final bool effectBehindSoldier = polygon.center.dy <= soldierScreenY;
+        if (paintLayer == _BoardPaintLayer.warEffectsBehindSoldier &&
+            effectBehindSoldier) {
+          _paintSlimeLose(canvas, polygon);
+        } else if (paintLayer == _BoardPaintLayer.warEffectsInFrontOfSoldier &&
+            !effectBehindSoldier) {
+          _paintSlimeLose(canvas, polygon);
+        }
       }
     }
   }
@@ -2515,6 +2645,7 @@ class _Pseudo3DBoardPainter extends CustomPainter {
         oldDelegate.meshMode != meshMode ||
         oldDelegate.zoom != zoom ||
         oldDelegate.effectT != effectT ||
+        oldDelegate.soldierScreenY != soldierScreenY ||
         oldDelegate.shadowAnchorWorldY != shadowAnchorWorldY ||
         oldDelegate.yellowSlimeFrames != yellowSlimeFrames ||
         oldDelegate.fireYellowFrames != fireYellowFrames ||

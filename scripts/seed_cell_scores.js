@@ -64,11 +64,11 @@ function loadCredential(serviceAccountPath) {
   return admin.credential.cert(serviceAccount);
 }
 
-function scoresForOwner(owner, ownerScore = 100) {
+function scoresForOwner(owner, ownerScore = 100, nonOwnerScore = 50) {
   return {
-    red_score: owner === 'red' ? ownerScore : 0,
-    yellow_score: owner === 'yellow' ? ownerScore : 0,
-    blue_score: owner === 'blue' ? ownerScore : 0,
+    red_score: owner === 'red' ? ownerScore : nonOwnerScore,
+    yellow_score: owner === 'yellow' ? ownerScore : nonOwnerScore,
+    blue_score: owner === 'blue' ? ownerScore : nonOwnerScore,
   };
 }
 
@@ -108,7 +108,7 @@ function applySpecialLevelFiveCorners(cells, radius) {
       );
     }
     targetCell.owner = special.owner;
-    targetCell.data = scoresForOwner(special.owner, -1);
+    targetCell.data = scoresForOwner(special.owner, -1, 0);
   }
 }
 
