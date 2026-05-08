@@ -77,14 +77,9 @@ function normalizeDegrees(angleRadians) {
   return (degrees + 360) % 360;
 }
 
-function ownerForAngle(angleDegrees) {
-  if (angleDegrees >= 330 || angleDegrees < 90) {
-    return 'red';
-  }
-  if (angleDegrees >= 90 && angleDegrees < 210) {
-    return 'yellow';
-  }
-  return 'blue';
+function circularDistanceDegrees(a, b) {
+  const diff = Math.abs(a - b) % 360;
+  return Math.min(diff, 360 - diff);
 }
 
 function specialLevelFiveCorners(radius) {
@@ -114,6 +109,16 @@ function applySpecialLevelFiveCorners(cells, radius) {
 
 function buildCells(radius) {
   const cells = [];
+  const remainingCells = [];
+  const sectorCenters = {
+    red: 30,
+    yellow: 150,
+    blue: 270,
+  };
+  const specialCorners = specialLevelFiveCorners(radius);
+  const specialCornerById = new Map(
+    specialCorners.map((corner) => [`${corner.q}_${corner.r}`, corner]),
+  );
 
   for (let q = -radius; q <= radius; q += 1) {
     const rMin = Math.max(-radius, -q - radius);
@@ -131,21 +136,62 @@ function buildCells(radius) {
         continue;
       }
 
+      const specialCorner = specialCornerById.get(id);
+      if (specialCorner) {
+        cells.push({
+          id,
+          q,
+          r,
+          owner: specialCorner.owner,
+          data: scoresForOwner(specialCorner.owner, -1, 0),
+        });
+        continue;
+      }
+
       const localX = 1.5 * q;
       const localY = Math.sqrt(3) * (r + q / 2);
       const angleDegrees = normalizeDegrees(Math.atan2(localY, localX));
-      const owner = ownerForAngle(angleDegrees);
-      cells.push({
+      const preferences = FACTIONS.map((faction) => ({
+        faction,
+        distance: circularDistanceDegrees(angleDegrees, sectorCenters[faction]),
+      })).sort((a, b) => a.distance - b.distance);
+      remainingCells.push({
         id,
         q,
         r,
-        owner,
-        data: scoresForOwner(owner),
+        preferences: preferences.map((entry) => entry.faction),
+        priority: (preferences[1]?.distance ?? 180) - preferences[0].distance,
       });
     }
   }
 
-  applySpecialLevelFiveCorners(cells, radius);
+  const targetPerFaction = remainingCells.length / FACTIONS.length;
+  if (!Number.isInteger(targetPerFaction)) {
+    throw new Error(
+      `Remaining cell count ${remainingCells.length} is not divisible equally across ${FACTIONS.length} factions.`,
+    );
+  }
+
+  const remainingQuota = Object.fromEntries(
+    FACTIONS.map((faction) => [faction, targetPerFaction]),
+  );
+
+  remainingCells.sort((a, b) => b.priority - a.priority);
+
+  for (const cell of remainingCells) {
+    const owner =
+      cell.preferences.find((faction) => remainingQuota[faction] > 0) ??
+      cell.preferences[0];
+    remainingQuota[owner] -= 1;
+    cells.push({
+      id: cell.id,
+      q: cell.q,
+      r: cell.r,
+      owner,
+      data: scoresForOwner(owner),
+    });
+  }
+
   return cells;
 }
 

@@ -1,5 +1,100 @@
 import 'package:flutter/material.dart';
 
+Offset clampJoystickDelta(Offset delta, double maxTravel) {
+  if (delta.distance > maxTravel && maxTravel > 0) {
+    return delta * (maxTravel / delta.distance);
+  }
+  return delta;
+}
+
+class VirtualJoystickVisual extends StatelessWidget {
+  const VirtualJoystickVisual({
+    super.key,
+    required this.outerRadius,
+    required this.knobRadius,
+    required this.knobOffset,
+    this.baseColor = const Color(0x33FFFFFF),
+    this.ringColor = const Color(0x88FFFFFF),
+    this.knobColor = const Color(0xE6FFFFFF),
+    this.knobOutlineColor = const Color(0x42000000),
+    this.knobAssetPath,
+    this.knobImageScale = 1,
+    this.knobImageOffset = Offset.zero,
+  });
+
+  final double outerRadius;
+  final double knobRadius;
+  final Offset knobOffset;
+  final Color baseColor;
+  final Color ringColor;
+  final Color knobColor;
+  final Color knobOutlineColor;
+  final String? knobAssetPath;
+  final double knobImageScale;
+  final Offset knobImageOffset;
+
+  @override
+  Widget build(BuildContext context) {
+    final double s = outerRadius * 2;
+    final Offset center = Offset(outerRadius, outerRadius);
+    final Offset knobCenter = center + knobOffset;
+    return SizedBox(
+      width: s,
+      height: s,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          CustomPaint(
+            painter: _JoystickBasePainter(
+              outerRadius: outerRadius,
+              baseColor: baseColor,
+              ringColor: ringColor,
+            ),
+            size: Size(s, s),
+          ),
+          Positioned(
+            left: knobCenter.dx - knobRadius,
+            top: knobCenter.dy - knobRadius,
+            child: Container(
+              width: knobRadius * 2,
+              height: knobRadius * 2,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: knobColor,
+                border: Border.all(color: knobOutlineColor, width: 1.5),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: knobAssetPath == null
+                  ? null
+                  : Padding(
+                      padding: const EdgeInsets.all(3),
+                      child: ClipOval(
+                        child: Transform.translate(
+                          offset: knobImageOffset,
+                          child: Transform.scale(
+                            scale: knobImageScale,
+                            child: Image.asset(
+                              knobAssetPath!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Circular joystick: knob stays inside the outer ring. [onChanged] receives a vector whose
 /// length is in `[0, 1]` (normalized by usable travel) and direction matches screen axes.
 class VirtualJoystick extends StatefulWidget {
@@ -11,6 +106,7 @@ class VirtualJoystick extends StatefulWidget {
     this.baseColor = const Color(0x33FFFFFF),
     this.ringColor = const Color(0x88FFFFFF),
     this.knobColor = const Color(0xE6FFFFFF),
+    this.knobOutlineColor = const Color(0x42000000),
     this.knobAssetPath,
     this.knobImageScale = 1,
     this.knobImageOffset = Offset.zero,
@@ -22,6 +118,7 @@ class VirtualJoystick extends StatefulWidget {
   final Color baseColor;
   final Color ringColor;
   final Color knobColor;
+  final Color knobOutlineColor;
   final String? knobAssetPath;
   final double knobImageScale;
   final Offset knobImageOffset;
@@ -38,9 +135,7 @@ class _VirtualJoystickState extends State<VirtualJoystick> {
   void _updateKnob(Offset localPosition) {
     final double maxT = _maxTravel;
     Offset d = localPosition - Offset(widget.outerRadius, widget.outerRadius);
-    if (d.distance > maxT && maxT > 0) {
-      d = d * (maxT / d.distance);
-    }
+    d = clampJoystickDelta(d, maxT);
     setState(() => _knob = d);
     _emit(d, maxT);
   }
@@ -60,69 +155,25 @@ class _VirtualJoystickState extends State<VirtualJoystick> {
 
   @override
   Widget build(BuildContext context) {
-    final double s = widget.outerRadius * 2;
-    final Offset center = Offset(widget.outerRadius, widget.outerRadius);
-    final Offset knobCenter = center + _knob;
     return SizedBox(
-      width: s,
-      height: s,
+      width: widget.outerRadius * 2,
+      height: widget.outerRadius * 2,
       child: GestureDetector(
         onPanDown: (DragDownDetails e) => _updateKnob(e.localPosition),
         onPanUpdate: (DragUpdateDetails e) => _updateKnob(e.localPosition),
         onPanEnd: (_) => _release(),
         onPanCancel: _release,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            CustomPaint(
-              painter: _JoystickBasePainter(
-                outerRadius: widget.outerRadius,
-                baseColor: widget.baseColor,
-                ringColor: widget.ringColor,
-              ),
-              size: Size(s, s),
-            ),
-            Positioned(
-              left: knobCenter.dx - widget.knobRadius,
-              top: knobCenter.dy - widget.knobRadius,
-              child: Container(
-                width: widget.knobRadius * 2,
-                height: widget.knobRadius * 2,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: widget.knobColor,
-                  border: Border.all(
-                    color: Colors.black26,
-                    width: 1.5,
-                  ),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: widget.knobAssetPath == null
-                    ? null
-                    : Padding(
-                        padding: const EdgeInsets.all(3),
-                        child: ClipOval(
-                          child: Transform.translate(
-                            offset: widget.knobImageOffset,
-                            child: Transform.scale(
-                              scale: widget.knobImageScale,
-                              child: Image.asset(
-                                widget.knobAssetPath!,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-          ],
+        child: VirtualJoystickVisual(
+          outerRadius: widget.outerRadius,
+          knobRadius: widget.knobRadius,
+          knobOffset: _knob,
+          baseColor: widget.baseColor,
+          ringColor: widget.ringColor,
+          knobColor: widget.knobColor,
+          knobOutlineColor: widget.knobOutlineColor,
+          knobAssetPath: widget.knobAssetPath,
+          knobImageScale: widget.knobImageScale,
+          knobImageOffset: widget.knobImageOffset,
         ),
       ),
     );

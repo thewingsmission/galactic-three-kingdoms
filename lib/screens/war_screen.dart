@@ -25,10 +25,12 @@ class WarScreen extends StatefulWidget {
 
 class _WarScreenState extends State<WarScreen>
     with SingleTickerProviderStateMixin {
-  final ValueNotifier<Vector2> _velocityHud =
-      ValueNotifier<Vector2>(Vector2.zero());
-  final ValueNotifier<Vector2> _soldier1PosHud =
-      ValueNotifier<Vector2>(Vector2.zero());
+  final ValueNotifier<Vector2> _velocityHud = ValueNotifier<Vector2>(
+    Vector2.zero(),
+  );
+  final ValueNotifier<Vector2> _soldier1PosHud = ValueNotifier<Vector2>(
+    Vector2.zero(),
+  );
 
   late CohortWarGame _game;
   Key _gameKey = UniqueKey();
@@ -111,7 +113,9 @@ class _WarScreenState extends State<WarScreen>
     final bool pressed = _pressedButton == mode;
     final bool selected = _actionMode == mode;
     final bool anotherPressed = _pressedButton != null && !pressed;
-    final double scale = pressed ? 1.2 : (selected && !anotherPressed ? 1.2 : 1.0);
+    final double scale = pressed
+        ? 1.2
+        : (selected && !anotherPressed ? 1.2 : 1.0);
     final double size = _btnDiameter * scale;
     return Positioned(
       bottom: bottomOffset - (size - _btnDiameter) / 2 - 20,
@@ -157,7 +161,9 @@ class _WarScreenState extends State<WarScreen>
                       boxShadow: glowOpacity > 0
                           ? <BoxShadow>[
                               BoxShadow(
-                                color: outlineColor.withValues(alpha: glowOpacity * 0.95),
+                                color: outlineColor.withValues(
+                                  alpha: glowOpacity * 0.95,
+                                ),
                                 blurRadius: 16 + glowSpread,
                                 spreadRadius: glowSpread,
                               ),
@@ -212,9 +218,9 @@ class _WarScreenState extends State<WarScreen>
     final List<Color> blueTier = kBlueFactionComponentColors;
     final List<Color> joystickTier = factionTierList(widget.playerPalette);
     final String joystickKnobAssetPath = switch (widget.playerPalette) {
-      SoldierDesignPalette.red => 'image/red_eagle.png',
-      SoldierDesignPalette.yellow => 'image/yellow_tiger.png',
-      SoldierDesignPalette.blue => 'image/blue_dragon.png',
+      SoldierDesignPalette.red => 'image/head_red_eagle.png',
+      SoldierDesignPalette.yellow => 'image/head_yellow_tiger.png',
+      SoldierDesignPalette.blue => 'image/head_blue_dragon.png',
     };
     final double joystickKnobImageScale = switch (widget.playerPalette) {
       SoldierDesignPalette.red => 1.2,
@@ -256,24 +262,49 @@ class _WarScreenState extends State<WarScreen>
               child: ValueListenableBuilder<int>(
                 valueListenable: _game.killCountRevision,
                 builder: (BuildContext context, int _, Widget? child) {
-                  String fmt(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(n >= 10000 ? 0 : 1)}k' : '$n';
+                  String fmt(int n) => n >= 1000
+                      ? '${(n / 1000).toStringAsFixed(n >= 10000 ? 0 : 1)}k'
+                      : '$n';
                   final int r = _game.killCounts[SoldierDesignPalette.red] ?? 0;
-                  final int y = _game.killCounts[SoldierDesignPalette.yellow] ?? 0;
-                  final int b = _game.killCounts[SoldierDesignPalette.blue] ?? 0;
+                  final int y =
+                      _game.killCounts[SoldierDesignPalette.yellow] ?? 0;
+                  final int b =
+                      _game.killCounts[SoldierDesignPalette.blue] ?? 0;
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     color: Colors.black.withValues(alpha: 0.45),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: <Widget>[
-                        Text('Red: ${fmt(r)}',
-                          style: TextStyle(color: kRedFactionComponentColors[0], fontSize: 14, fontWeight: FontWeight.w700)),
+                        Text(
+                          'Red: ${fmt(r)}',
+                          style: TextStyle(
+                            color: kRedFactionComponentColors[0],
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         const SizedBox(width: 32),
-                        Text('Yellow: ${fmt(y)}',
-                          style: TextStyle(color: kYellowFactionComponentColors[0], fontSize: 14, fontWeight: FontWeight.w700)),
+                        Text(
+                          'Yellow: ${fmt(y)}',
+                          style: TextStyle(
+                            color: kYellowFactionComponentColors[0],
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         const SizedBox(width: 32),
-                        Text('Blue: ${fmt(b)}',
-                          style: TextStyle(color: kBlueFactionComponentColors[0], fontSize: 14, fontWeight: FontWeight.w700)),
+                        Text(
+                          'Blue: ${fmt(b)}',
+                          style: TextStyle(
+                            color: kBlueFactionComponentColors[0],
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -305,7 +336,12 @@ class _WarScreenState extends State<WarScreen>
                         knobColor: eliminated
                             ? const Color(0x66888888)
                             : joystickTier[4].withValues(alpha: 0.98),
-                        knobAssetPath: eliminated ? null : joystickKnobAssetPath,
+                        knobOutlineColor: eliminated
+                            ? const Color(0x66888888)
+                            : joystickTier[1],
+                        knobAssetPath: eliminated
+                            ? null
+                            : joystickKnobAssetPath,
                         knobImageScale: joystickKnobImageScale,
                         knobImageOffset: joystickKnobImageOffset,
                       ),
@@ -344,7 +380,10 @@ class _WarScreenState extends State<WarScreen>
                         bottomOffset: _btnRadius * 1.4,
                         rightOffset: _btnRadius * 2.65,
                         imageScale: 2.016,
-                        imageOffset: Offset(_btnRadius * 0.03, _btnRadius * 0.31),
+                        imageOffset: Offset(
+                          _btnRadius * 0.03,
+                          _btnRadius * 0.31,
+                        ),
                       ),
                       _buildActionButton(
                         mode: WarActionMode.target,
@@ -375,12 +414,12 @@ class _WarScreenState extends State<WarScreen>
                     children: <Widget>[
                       Text(
                         'GAME OVER',
-                        style:
-                            Theme.of(context).textTheme.displaySmall?.copyWith(
-                                  color: Colors.redAccent.shade100,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 6,
-                                ),
+                        style: Theme.of(context).textTheme.displaySmall
+                            ?.copyWith(
+                              color: Colors.redAccent.shade100,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 6,
+                            ),
                       ),
                       const SizedBox(height: 32),
                       Row(
@@ -392,9 +431,13 @@ class _WarScreenState extends State<WarScreen>
                             label: const Text('Restart'),
                             style: FilledButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 14),
+                                horizontal: 24,
+                                vertical: 14,
+                              ),
                               textStyle: const TextStyle(
-                                  fontSize: 15, fontWeight: FontWeight.w700),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -406,9 +449,13 @@ class _WarScreenState extends State<WarScreen>
                               foregroundColor: Colors.white,
                               side: const BorderSide(color: Colors.white38),
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 14),
+                                horizontal: 24,
+                                vertical: 14,
+                              ),
                               textStyle: const TextStyle(
-                                  fontSize: 15, fontWeight: FontWeight.w700),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],

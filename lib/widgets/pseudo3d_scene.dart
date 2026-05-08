@@ -19,6 +19,7 @@ import '../models/soldier_faction_color_theme.dart';
 import 'hex_cell_preview_layout.dart';
 import 'hex_cell_styles_paint.dart';
 import 'soldier_design_catalog.dart';
+import 'virtual_joystick.dart';
 
 class Pseudo3DScene extends StatefulWidget {
   const Pseudo3DScene({
@@ -101,9 +102,8 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   static const double _soldierMotionCycleSeconds = 1.4;
   static const double _soldierAnchorScreenYOffsetFactor = 0.15;
   static const double _markerBoxSize = 84;
-  static const double _touchHoldControlRadius = 110;
-  static const double _dynamicJoystickBaseRadius = 34;
-  static const double _dynamicJoystickKnobRadius = 22;
+  static const double _dynamicJoystickBaseRadius = 72;
+  static const double _dynamicJoystickKnobRadius = 28;
   static const double _minZoom = 0.7;
   static const double _maxZoom = 1.8;
   static const double _keyboardZoomStep = 0.08;
@@ -317,13 +317,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     });
   }
 
-  String _centerSoldierFactionFolderName(SoldierDesignPalette faction) =>
-      switch (faction) {
-        SoldierDesignPalette.red => 'red',
-        SoldierDesignPalette.yellow => 'yellow',
-        SoldierDesignPalette.blue => 'blue',
-      };
-
   String _centerSoldierFacingFolderName(_CenterSoldierFacing facing) =>
       switch (facing) {
         _CenterSoldierFacing.front => 'front',
@@ -359,9 +352,8 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   Future<void> _loadCenterSoldierFramesForFacing(
     _CenterSoldierFacing facing,
   ) async {
-    final String factionName = _centerSoldierFactionFolderName(_playerFaction);
     final String facingName = _centerSoldierFacingFolderName(facing);
-    final String folderName = 'player_${factionName}_${facingName}_sprite';
+    final String folderName = 'player_yellow_${facingName}_sprite';
     final List<ui.Image> loaded = <ui.Image>[];
     for (int i = 1; i <= 28; i++) {
       final String assetPath =
@@ -752,18 +744,14 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
 
   void _updateTouchHoldVector(Offset localPosition) {
     final Offset baseCenter = _dynamicJoystickBaseCenter ?? localPosition;
+    final double maxTravel = _dynamicJoystickBaseRadius;
     Offset delta = localPosition - baseCenter;
-    if (delta.distance > _touchHoldControlRadius && delta.distance > 0) {
-      delta = delta * (_touchHoldControlRadius / delta.distance);
-    }
+    delta = clampJoystickDelta(delta, maxTravel);
     final Offset knobCenter = baseCenter + delta;
     setState(() {
       _dynamicJoystickBaseCenter = baseCenter;
       _dynamicJoystickKnobCenter = knobCenter;
-      _movementVector = Offset(
-        delta.dx / _touchHoldControlRadius,
-        delta.dy / _touchHoldControlRadius,
-      );
+      _movementVector = Offset(delta.dx / maxTravel, delta.dy / maxTravel);
       if (_movementVector.distanceSquared > 1e-6) {
         _centerSoldierFacing = _facingFromMovement(_movementVector);
         _ensureCenterSoldierFramesLoaded(_centerSoldierFacing);
@@ -805,28 +793,32 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   }
 
   _HudScorePanelModel _buildCountryScorePanel() {
-    final Map<SoldierDesignPalette, int> scores =
+    final Map<SoldierDesignPalette, int> territorySize =
         _boardAggregateScores.countryCellCounts;
-    final Map<SoldierDesignPalette, int> deltas = _buildCountryTrendMap(scores);
-    final List<SoldierDesignPalette> order = _sortedFactionsByScores(scores);
-    final List<_HudScoreRowModel> rows = order
-        .map(
-          (SoldierDesignPalette faction) => _HudScoreRowModel(
-            faction: faction,
-            label: _factionName(faction),
-            value: scores[faction] ?? 0,
-            delta: deltas[faction] ?? 0,
-            emphasis: faction == order.first,
-          ),
-        )
-        .toList();
+    final List<SoldierDesignPalette> order = _sortedFactionsByScores(
+      territorySize,
+    );
     return _HudScorePanelModel(
       kind: _HudPanelKind.kingdom,
-      title: 'Kingdom Dominion',
-      subtitle: 'Three Kingdoms score surge',
+      title: 'Kingdom Census',
+      subtitle: 'Realm-wide land statistics',
       themeFaction: order.first,
       session: widget.session,
-      rows: rows,
+      rows: const <_HudScoreRowModel>[],
+      kingdomSections: <_HudKingdomMetricSection>[
+        _HudKingdomMetricSection(
+          label: 'Territory Size',
+          values: territorySize,
+        ),
+        _HudKingdomMetricSection(
+          label: 'Land Power',
+          values: _boardAggregateScores.landPowerByFaction,
+        ),
+        _HudKingdomMetricSection(
+          label: 'Total Tribute',
+          values: _boardAggregateScores.totalTributeByFaction,
+        ),
+      ],
       panelIcon: _HudPanelIconData(
         assetPath: _joystickKnobAssetPath(order.first),
         imageScale: _joystickKnobImageScale(order.first),
@@ -945,21 +937,6 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     );
   }
 
-  Map<SoldierDesignPalette, int> _buildCountryTrendMap(
-    Map<SoldierDesignPalette, int> scores,
-  ) {
-    return <SoldierDesignPalette, int>{
-      for (final SoldierDesignPalette faction in SoldierDesignPalette.values)
-        faction: math.max(
-          1,
-          math.min(
-            scores[faction] ?? 0,
-            12 + ((scores[faction] ?? 0) * 0.24).round() + faction.index * 3,
-          ),
-        ),
-    };
-  }
-
   Map<SoldierDesignPalette, int> _buildCellTrendMap(
     Offset localCenter,
     Map<SoldierDesignPalette, int> scores,
@@ -1005,9 +982,9 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
 
   String _joystickKnobAssetPath(SoldierDesignPalette faction) =>
       switch (faction) {
-        SoldierDesignPalette.red => 'image/red_eagle.png',
-        SoldierDesignPalette.yellow => 'image/yellow_tiger.png',
-        SoldierDesignPalette.blue => 'image/blue_dragon.png',
+        SoldierDesignPalette.red => 'image/head_red_eagle.png',
+        SoldierDesignPalette.yellow => 'image/head_yellow_tiger.png',
+        SoldierDesignPalette.blue => 'image/head_blue_dragon.png',
       };
 
   double _joystickKnobImageScale(SoldierDesignPalette faction) =>
@@ -1125,6 +1102,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                   _soldierMotionCycleSeconds) %
               1.0;
           final bool isSoldierMoving = _movementVector.distanceSquared > 1e-6;
+          final List<Color> joystickTier = factionTierList(_playerFaction);
           _ensureCenterSoldierFramesLoaded(_centerSoldierFacing);
           final _CenterSoldierFrameTuning currentTuning =
               _centerSoldierTuningsByFacing[_centerSoldierFacing]!;
@@ -1377,6 +1355,13 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                     knobCenter: _dynamicJoystickKnobCenter,
                     baseRadius: _dynamicJoystickBaseRadius,
                     knobRadius: _dynamicJoystickKnobRadius,
+                    baseColor: joystickTier[2].withValues(alpha: 0.5),
+                    ringColor: joystickTier[1].withValues(alpha: 0.9),
+                    knobColor: joystickTier[4].withValues(alpha: 0.98),
+                    knobOutlineColor: joystickTier[1],
+                    knobAssetPath: _joystickKnobAssetPath(_playerFaction),
+                    knobImageScale: _joystickKnobImageScale(_playerFaction),
+                    knobImageOffset: _joystickKnobImageOffset(_playerFaction),
                   ),
                 ),
               ),
@@ -1461,12 +1446,26 @@ class _DynamicJoystickOverlay extends StatelessWidget {
     required this.knobCenter,
     required this.baseRadius,
     required this.knobRadius,
+    required this.baseColor,
+    required this.ringColor,
+    required this.knobColor,
+    required this.knobOutlineColor,
+    required this.knobAssetPath,
+    required this.knobImageScale,
+    required this.knobImageOffset,
   });
 
   final Offset? baseCenter;
   final Offset? knobCenter;
   final double baseRadius;
   final double knobRadius;
+  final Color baseColor;
+  final Color ringColor;
+  final Color knobColor;
+  final Color knobOutlineColor;
+  final String? knobAssetPath;
+  final double knobImageScale;
+  final Offset knobImageOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -1474,39 +1473,23 @@ class _DynamicJoystickOverlay extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final Offset knobOffset = knobCenter! - baseCenter!;
     return Stack(
       children: <Widget>[
         Positioned(
           left: baseCenter!.dx - baseRadius,
           top: baseCenter!.dy - baseRadius,
-          child: Container(
-            width: baseRadius * 2,
-            height: baseRadius * 2,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0x22000000),
-              border: Border.all(color: const Color(0x88FFFFFF), width: 2),
-            ),
-          ),
-        ),
-        Positioned(
-          left: knobCenter!.dx - knobRadius,
-          top: knobCenter!.dy - knobRadius,
-          child: Container(
-            width: knobRadius * 2,
-            height: knobRadius * 2,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xCCFFFFFF),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x40000000),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ],
-              border: Border.all(color: const Color(0xAA1A1A1A), width: 1.5),
-            ),
+          child: VirtualJoystickVisual(
+            outerRadius: baseRadius,
+            knobRadius: knobRadius,
+            knobOffset: knobOffset,
+            baseColor: baseColor,
+            ringColor: ringColor,
+            knobColor: knobColor,
+            knobOutlineColor: knobOutlineColor,
+            knobAssetPath: knobAssetPath,
+            knobImageScale: knobImageScale,
+            knobImageOffset: knobImageOffset,
           ),
         ),
       ],
@@ -2800,6 +2783,18 @@ class _StrategicBoardScoring {
   ) {
     final Map<SoldierDesignPalette, int> countryCellCounts = session
         .ownedCellCounts();
+    final Map<SoldierDesignPalette, int> landPowerByFaction =
+        <SoldierDesignPalette, int>{
+          for (final SoldierDesignPalette faction
+              in SoldierDesignPalette.values)
+            faction: 0,
+        };
+    final Map<SoldierDesignPalette, int> totalTributeByFaction =
+        <SoldierDesignPalette, int>{
+          for (final SoldierDesignPalette faction
+              in SoldierDesignPalette.values)
+            faction: 0,
+        };
     final Map<SoldierDesignPalette, int> enemyKillsByFaction =
         <SoldierDesignPalette, int>{
           for (final SoldierDesignPalette faction
@@ -2815,12 +2810,24 @@ class _StrategicBoardScoring {
         in _Pseudo3DBoardPainter._baseLandTileCenters) {
       final (int q, int r) = _axialOf(localCenter);
       final SoldierDesignPalette faction = session.ownerForCell(q, r);
+      final int level = session.levelForCell(q, r);
+      final Map<SoldierDesignPalette, int> cellScores = session.scoresForCell(
+        q,
+        r,
+      );
+
+      landPowerByFaction[faction] = (landPowerByFaction[faction] ?? 0) + level;
+      for (final SoldierDesignPalette tributeFaction
+          in SoldierDesignPalette.values) {
+        totalTributeByFaction[tributeFaction] =
+            (totalTributeByFaction[tributeFaction] ?? 0) +
+            (cellScores[tributeFaction] ?? 0);
+      }
 
       if (faction != playerFaction) {
         continue;
       }
 
-      final int level = session.levelForCell(q, r);
       moneyCollected += 12 + level * 5;
 
       if (!_Pseudo3DBoardPainter._isBoundaryWarVfxSlot(q, r)) {
@@ -2861,6 +2868,8 @@ class _StrategicBoardScoring {
 
     return _BoardAggregateScores(
       countryCellCounts: countryCellCounts,
+      landPowerByFaction: landPowerByFaction,
+      totalTributeByFaction: totalTributeByFaction,
       enemyKillsByFaction: enemyKillsByFaction,
       moneyCollected: moneyCollected,
       personalLevel: level,
@@ -2915,6 +2924,8 @@ class _StrategicBoardScoring {
 class _BoardAggregateScores {
   const _BoardAggregateScores({
     required this.countryCellCounts,
+    required this.landPowerByFaction,
+    required this.totalTributeByFaction,
     required this.enemyKillsByFaction,
     required this.moneyCollected,
     required this.personalLevel,
@@ -2925,6 +2936,8 @@ class _BoardAggregateScores {
   });
 
   final Map<SoldierDesignPalette, int> countryCellCounts;
+  final Map<SoldierDesignPalette, int> landPowerByFaction;
+  final Map<SoldierDesignPalette, int> totalTributeByFaction;
   final Map<SoldierDesignPalette, int> enemyKillsByFaction;
   final int moneyCollected;
   final int personalLevel;
@@ -2946,6 +2959,7 @@ class _HudScorePanelModel {
     this.heroStats,
     this.panelIcon,
     this.session,
+    this.kingdomSections,
   });
 
   final _HudPanelKind kind;
@@ -2956,6 +2970,7 @@ class _HudScorePanelModel {
   final _HudHeroStats? heroStats;
   final _HudPanelIconData? panelIcon;
   final GameSessionState? session;
+  final List<_HudKingdomMetricSection>? kingdomSections;
 }
 
 class _HudPanelIconData {
@@ -3012,6 +3027,13 @@ class _HudScoreRowModel {
   final String valuePrefix;
 }
 
+class _HudKingdomMetricSection {
+  const _HudKingdomMetricSection({required this.label, required this.values});
+
+  final String label;
+  final Map<SoldierDesignPalette, int> values;
+}
+
 class _HudScorePanelCard extends StatelessWidget {
   const _HudScorePanelCard({required this.model});
 
@@ -3058,6 +3080,8 @@ class _HudKingdomPanelBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<Color> theme = factionTierList(model.themeFaction);
     final _HudPanelIconData icon = model.panelIcon!;
+    final List<_HudKingdomMetricSection> sections =
+        model.kingdomSections ?? const <_HudKingdomMetricSection>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -3096,10 +3120,11 @@ class _HudKingdomPanelBody extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  for (int i = 0; i < model.rows.length; i++) ...<Widget>[
-                    _HudFactionScoreRow(model: model.rows[i]),
-                    if (i != model.rows.length - 1) const SizedBox(height: 3),
+                  for (int i = 0; i < sections.length; i++) ...<Widget>[
+                    _HudKingdomMetricSectionView(section: sections[i]),
+                    if (i != sections.length - 1) const SizedBox(height: 5),
                   ],
                 ],
               ),
@@ -3146,6 +3171,42 @@ class _HudLandPanelBody extends StatelessWidget {
           _HudFactionScoreRow(model: model.rows[i]),
           if (i != model.rows.length - 1) const SizedBox(height: 3),
         ],
+      ],
+    );
+  }
+}
+
+class _HudKingdomMetricSectionView extends StatelessWidget {
+  const _HudKingdomMetricSectionView({required this.section});
+
+  final _HudKingdomMetricSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          section.label,
+          style: const TextStyle(
+            color: Color(0xCCF7FBFF),
+            fontSize: 8.1,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Row(
+          children: SoldierDesignPalette.values
+              .map(
+                (SoldierDesignPalette faction) => Expanded(
+                  child: _HudFactionDotValue(
+                    faction: faction,
+                    value: section.values[faction] ?? 0,
+                  ),
+                ),
+              )
+              .toList(),
+        ),
       ],
     );
   }
@@ -3353,6 +3414,50 @@ class _HudFactionScoreRow extends StatelessWidget {
             color: chipColor.withValues(alpha: 0.98),
             fontSize: valueSize,
             fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HudFactionDotValue extends StatelessWidget {
+  const _HudFactionDotValue({required this.faction, required this.value});
+
+  final SoldierDesignPalette faction;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color chipColor = factionTierColor(faction, 3);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          width: 5,
+          height: 5,
+          decoration: BoxDecoration(
+            color: chipColor,
+            shape: BoxShape.circle,
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: chipColor.withValues(alpha: 0.4),
+                blurRadius: 5,
+                spreadRadius: 0.3,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 3),
+        Flexible(
+          child: Text(
+            _formatCompactInt(value),
+            style: TextStyle(
+              color: chipColor.withValues(alpha: 0.98),
+              fontSize: 8.5,
+              fontWeight: FontWeight.w900,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
