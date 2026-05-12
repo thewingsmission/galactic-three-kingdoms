@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../models/game_session_state.dart';
 import '../models/soldier_design_palette.dart';
 import '../models/soldier_faction_color_theme.dart';
+import '../widgets/analytics_dialog.dart';
 import '../widgets/pseudo3d_scene.dart';
 
 class MainScreen extends StatefulWidget {
@@ -996,7 +997,12 @@ class _BottomRibbon extends StatelessWidget {
       _RibbonAction(label: 'Atlas', onTap: onOpenDesigns),
       _RibbonAction(
         label: 'Rank',
-        onTap: () => _showPlaceholder(context, 'Rank'),
+        onTap: () {
+          showDialog<void>(
+            context: context,
+            builder: (BuildContext context) => const AnalyticsDialog(),
+          );
+        },
       ),
       _RibbonAction(label: 'War', onTap: onOpenWar),
       _RibbonAction(

@@ -35,6 +35,11 @@ class GameSessionState {
         'blue': <int, Map<int, int>>{},
       };
   bool cellScoresLoaded = false;
+  final List<KingdomScoreHistoryPoint> kingdomDailyScoreHistory =
+      <KingdomScoreHistoryPoint>[];
+  final List<KingdomScoreHistoryPoint> kingdomMonthlyScoreHistory =
+      <KingdomScoreHistoryPoint>[];
+  bool kingdomScoreHistoryLoaded = false;
 
   void saveInventoryState({
     required SoldierDesignPalette palette,
@@ -95,6 +100,101 @@ class GameSessionState {
     }
 
     cellScoresLoaded = true;
+  }
+
+  Future<void> loadKingdomScoreHistory({bool forceRefresh = false}) async {
+    if (kingdomScoreHistoryLoaded && !forceRefresh) {
+      return;
+    }
+
+    final Future<DocumentSnapshot<Map<String, dynamic>>> dailyRequest =
+        FirebaseFirestore.instance
+            .collection('scores')
+            .doc('kingdom_daily_score')
+            .get();
+    final Future<DocumentSnapshot<Map<String, dynamic>>> monthlyRequest =
+        FirebaseFirestore.instance
+            .collection('scores')
+            .doc('kingdom_monthly_score')
+            .get();
+
+    final List<DocumentSnapshot<Map<String, dynamic>>> snapshots =
+        await Future.wait(<Future<DocumentSnapshot<Map<String, dynamic>>>>[
+          dailyRequest,
+          monthlyRequest,
+        ]).timeout(
+          const Duration(seconds: 12),
+          onTimeout: () {
+            throw TimeoutException(
+              'Timed out loading Firestore documents scores/kingdom_daily_score and scores/kingdom_monthly_score.',
+            );
+          },
+        );
+
+    final Map<String, dynamic>? dailyData = snapshots[0].data();
+    final Map<String, dynamic>? monthlyData = snapshots[1].data();
+    if (dailyData == null) {
+      throw StateError(
+        'Firestore document scores/kingdom_daily_score does not exist.',
+      );
+    }
+    if (monthlyData == null) {
+      throw StateError(
+        'Firestore document scores/kingdom_monthly_score does not exist.',
+      );
+    }
+
+    kingdomDailyScoreHistory
+      ..clear()
+      ..addAll(_parseKingdomScoreHistory(dailyData['days'], 'daily'));
+    kingdomMonthlyScoreHistory
+      ..clear()
+      ..addAll(_parseKingdomScoreHistory(monthlyData['months'], 'monthly'));
+    kingdomScoreHistoryLoaded = true;
+  }
+
+  List<KingdomScoreHistoryPoint> _parseKingdomScoreHistory(
+    dynamic rawEntries,
+    String granularity,
+  ) {
+    final Map<String, dynamic> entries = rawEntries is Map<String, dynamic>
+        ? rawEntries
+        : <String, dynamic>{};
+    final List<String> orderedKeys = entries.keys.toList()..sort();
+    return orderedKeys.map((String periodId) {
+      final dynamic rawPoint = entries[periodId];
+      final Map<String, dynamic> point = rawPoint is Map<String, dynamic>
+          ? rawPoint
+          : <String, dynamic>{};
+      return KingdomScoreHistoryPoint(
+        periodId: periodId,
+        granularity: granularity,
+        territorySizeByFaction: _parseKingdomMetricMap(point, 'territory_size'),
+        landPowerByFaction: _parseKingdomMetricMap(point, 'land_power'),
+        tributeRevenueByFaction: _parseKingdomMetricMap(
+          point,
+          'tribute_revenue',
+        ),
+      );
+    }).toList();
+  }
+
+  Map<SoldierDesignPalette, int> _parseKingdomMetricMap(
+    Map<String, dynamic> point,
+    String metricKey,
+  ) {
+    return <SoldierDesignPalette, int>{
+      for (final SoldierDesignPalette faction in SoldierDesignPalette.values)
+        faction: _parseFactionMetric(point[_factionKey(faction)], metricKey),
+    };
+  }
+
+  int _parseFactionMetric(dynamic rawFactionData, String metricKey) {
+    if (rawFactionData is! Map) {
+      return 0;
+    }
+    final dynamic metricValue = rawFactionData[metricKey];
+    return (metricValue as num?)?.toInt() ?? 0;
   }
 
   int cellScore(String faction, int q, int r) =>
@@ -241,4 +341,20 @@ class GameSessionState {
 
     return CohortDeployment(soldiers: soldiers);
   }
+}
+
+class KingdomScoreHistoryPoint {
+  const KingdomScoreHistoryPoint({
+    required this.periodId,
+    required this.granularity,
+    required this.territorySizeByFaction,
+    required this.landPowerByFaction,
+    required this.tributeRevenueByFaction,
+  });
+
+  final String periodId;
+  final String granularity;
+  final Map<SoldierDesignPalette, int> territorySizeByFaction;
+  final Map<SoldierDesignPalette, int> landPowerByFaction;
+  final Map<SoldierDesignPalette, int> tributeRevenueByFaction;
 }

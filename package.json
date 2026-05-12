@@ -9,6 +9,7 @@
   },
   "scripts": {
     "seed:cell-scores": "node scripts/seed_cell_scores.js",
+    "seed:kingdom-analytics": "node scripts/seed_kingdom_analytics.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 export '../models/level4_war_vfx.dart';
 
@@ -72,6 +73,10 @@ class _CenterSoldierSpritesheetMetrics {
 
 enum _CenterSoldierFacing { front, left, back, right }
 
+enum _KingdomHistoryView { daily, monthly }
+
+enum _KingdomMetricChartType { territorySize, landPower, tributeRevenue }
+
 class _CenterSoldierFrameTuning {
   const _CenterSoldierFrameTuning({
     this.localX = 0,
@@ -109,13 +114,14 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   static const double _keyboardZoomStep = 0.08;
   static const double _scoreHudTopInset = 10;
   static const Duration _scorePanelRevealDelay = Duration(milliseconds: 500);
+  static const Duration _boardAggregateRefreshInterval = Duration(seconds: 1);
 
   late final Ticker _ticker;
   late final FocusNode _keyboardFocusNode;
   static const SoldierDesignPalette _playerFaction =
       SoldierDesignPalette.yellow;
 
-  late final _BoardAggregateScores _boardAggregateScores;
+  late _BoardAggregateScores _boardAggregateScores;
   Duration? _lastElapsed;
   Offset _movementVector = Offset.zero;
   Offset _boardOffset = Offset.zero;
@@ -187,8 +193,15 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   Offset? _scorePanelCellLocalCenter;
   double _trackedShadowCellEnteredAtSec = 0;
   bool _showScorePanel = false;
+  bool _showKingdomScoreOverlay = false;
+  _KingdomHistoryView _kingdomHistoryView = _KingdomHistoryView.daily;
+  _KingdomMetricChartType _kingdomMetricChartType =
+      _KingdomMetricChartType.territorySize;
+  bool _kingdomHistoryLoading = false;
+  String? _kingdomHistoryError;
   Offset? _dynamicJoystickBaseCenter;
   Offset? _dynamicJoystickKnobCenter;
+  double _lastBoardAggregateRefreshAtSec = 0;
 
   @override
   void initState() {
@@ -548,6 +561,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
 
     setState(() {
       _effectT = elapsedSeconds;
+      _refreshBoardAggregateScores(elapsedSeconds);
 
       if (_movementVector != Offset.zero && mounted) {
         final Offset proposed = _boardOffset.translate(
@@ -571,8 +585,23 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     });
   }
 
+  void _refreshBoardAggregateScores(double elapsedSeconds) {
+    final double refreshIntervalSeconds =
+        _boardAggregateRefreshInterval.inMilliseconds /
+        Duration.millisecondsPerSecond;
+    if (elapsedSeconds - _lastBoardAggregateRefreshAtSec <
+        refreshIntervalSeconds) {
+      return;
+    }
+    _lastBoardAggregateRefreshAtSec = elapsedSeconds;
+    _boardAggregateScores = _StrategicBoardScoring.buildAggregateScores(
+      widget.session,
+      _playerFaction,
+    );
+  }
+
   void _updateScorePanelTracking(double elapsedSeconds) {
-    final bool wasVisible = _showScorePanel;
+    final bool wasVisible = _effectiveHudVisible;
     final Offset? shadowCell = _currentShadowSteppedCellLocalCenter();
     if (!_sameLocalCenter(shadowCell, _trackedShadowCellLocalCenter)) {
       _trackedShadowCellLocalCenter = shadowCell;
@@ -584,9 +613,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     if (_movementVector != Offset.zero || shadowCell == null) {
       _showScorePanel = false;
       _scorePanelCellLocalCenter = null;
-      if (wasVisible != _showScorePanel) {
-        widget.onHudVisibilityChanged?.call(_showScorePanel);
-      }
+      _notifyHudVisibilityChangedIfNeeded(wasVisible);
       return;
     }
 
@@ -599,8 +626,15 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
       _showScorePanel = false;
       _scorePanelCellLocalCenter = null;
     }
-    if (wasVisible != _showScorePanel) {
-      widget.onHudVisibilityChanged?.call(_showScorePanel);
+    _notifyHudVisibilityChangedIfNeeded(wasVisible);
+  }
+
+  bool get _effectiveHudVisible => _showScorePanel && !_showKingdomScoreOverlay;
+
+  void _notifyHudVisibilityChangedIfNeeded(bool previousVisible) {
+    final bool nextVisible = _effectiveHudVisible;
+    if (previousVisible != nextVisible) {
+      widget.onHudVisibilityChanged?.call(nextVisible);
     }
   }
 
@@ -640,10 +674,16 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   }
 
   void _onScaleStart(ScaleStartDetails details) {
+    if (_showKingdomScoreOverlay) {
+      return;
+    }
     _gestureStartZoom = _zoom;
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details, Size size) {
+    if (_showKingdomScoreOverlay) {
+      return;
+    }
     final bool isPinchZoom =
         _activePointerCount >= 2 && (details.scale - 1).abs() > 0.01;
     if (isPinchZoom) {
@@ -652,12 +692,18 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
+    if (_showKingdomScoreOverlay) {
+      return;
+    }
     if (_activePointerCount == 0) {
       _endTouchHoldMovement();
     }
   }
 
   void _onPointerDown(PointerDownEvent event) {
+    if (_showKingdomScoreOverlay) {
+      return;
+    }
     _activePointerCount += 1;
     if (_activePointerCount == 1) {
       _beginTouchHoldMovement(event.localPosition);
@@ -667,16 +713,63 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
   }
 
   void _onPointerMove(PointerMoveEvent event) {
+    if (_showKingdomScoreOverlay) {
+      return;
+    }
     if (_activePointerCount == 1) {
       _updateTouchHoldMovement(event.localPosition);
     }
   }
 
   void _onPointerEnd() {
+    if (_showKingdomScoreOverlay) {
+      return;
+    }
     _activePointerCount = math.max(0, _activePointerCount - 1);
     if (_activePointerCount == 0) {
       _endTouchHoldMovement();
     }
+  }
+
+  Future<void> _openKingdomScoreOverlay() async {
+    final bool wasVisible = _effectiveHudVisible;
+    setState(() {
+      _showKingdomScoreOverlay = true;
+      _kingdomHistoryView = _KingdomHistoryView.daily;
+      _kingdomMetricChartType = _KingdomMetricChartType.territorySize;
+      _kingdomHistoryLoading = true;
+      _kingdomHistoryError = null;
+      _movementVector = Offset.zero;
+      _dynamicJoystickBaseCenter = null;
+      _dynamicJoystickKnobCenter = null;
+      _activePointerCount = 0;
+    });
+    _notifyHudVisibilityChangedIfNeeded(wasVisible);
+    try {
+      await widget.session.loadKingdomScoreHistory(forceRefresh: true);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _kingdomHistoryLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _kingdomHistoryLoading = false;
+        _kingdomHistoryError = error.toString();
+      });
+    }
+  }
+
+  void _closeKingdomScoreOverlay() {
+    final bool wasVisible = _effectiveHudVisible;
+    setState(() {
+      _showKingdomScoreOverlay = false;
+    });
+    _notifyHudVisibilityChangedIfNeeded(wasVisible);
   }
 
   void _setZoom(double value) {
@@ -800,8 +893,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     );
     return _HudScorePanelModel(
       kind: _HudPanelKind.kingdom,
-      title: 'Kingdom Census',
-      subtitle: 'Realm-wide land statistics',
+      title: 'Kingdom Score',
       themeFaction: order.first,
       session: widget.session,
       rows: const <_HudScoreRowModel>[],
@@ -810,20 +902,13 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
           label: 'Territory Size',
           values: territorySize,
         ),
-        _HudKingdomMetricSection(
-          label: 'Land Power',
-          values: _boardAggregateScores.landPowerByFaction,
-        ),
-        _HudKingdomMetricSection(
-          label: 'Total Tribute',
-          values: _boardAggregateScores.totalTributeByFaction,
-        ),
       ],
       panelIcon: _HudPanelIconData(
         assetPath: _joystickKnobAssetPath(order.first),
         imageScale: _joystickKnobImageScale(order.first),
         imageOffset: _joystickKnobImageOffset(order.first),
       ),
+      isKingdomSummaryButton: true,
     );
   }
 
@@ -959,6 +1044,48 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
     };
   }
 
+  List<KingdomScoreHistoryPoint> _selectedKingdomHistoryPoints() {
+    final List<KingdomScoreHistoryPoint> source =
+        _kingdomHistoryView == _KingdomHistoryView.daily
+        ? widget.session.kingdomDailyScoreHistory
+        : widget.session.kingdomMonthlyScoreHistory;
+    final int desiredCount = _kingdomHistoryView == _KingdomHistoryView.daily
+        ? 30
+        : 12;
+    if (source.length <= desiredCount) {
+      return source;
+    }
+    return source.sublist(source.length - desiredCount);
+  }
+
+  String _kingdomHistoryCaption() {
+    return _kingdomHistoryView == _KingdomHistoryView.daily
+        ? 'Past 30 days'
+        : 'Past 12 months';
+  }
+
+  (String, String) _kingdomMetricChartTitle() {
+    return switch (_kingdomMetricChartType) {
+      _KingdomMetricChartType.territorySize => ('Territory Size', 'Total lands occupied'),
+      _KingdomMetricChartType.landPower => ('Land Power', 'Sum of level of occupied land'),
+      _KingdomMetricChartType.tributeRevenue => ('Tribute Revenue', 'Total enemy killed'),
+    };
+  }
+
+  _KingdomMetricValueGetter _kingdomMetricValueGetter() {
+    return switch (_kingdomMetricChartType) {
+      _KingdomMetricChartType.territorySize =>
+        (KingdomScoreHistoryPoint point, SoldierDesignPalette faction) =>
+            point.territorySizeByFaction[faction] ?? 0,
+      _KingdomMetricChartType.landPower =>
+        (KingdomScoreHistoryPoint point, SoldierDesignPalette faction) =>
+            point.landPowerByFaction[faction] ?? 0,
+      _KingdomMetricChartType.tributeRevenue =>
+        (KingdomScoreHistoryPoint point, SoldierDesignPalette faction) =>
+            point.tributeRevenueByFaction[faction] ?? 0,
+    };
+  }
+
   List<SoldierDesignPalette> _sortedFactionsByScores(
     Map<SoldierDesignPalette, int> scores,
   ) {
@@ -1003,26 +1130,98 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
 
   Widget _buildScoreHud() {
     final List<_HudScorePanelModel> panels = _buildHudPanels();
-    return IgnorePointer(
-      child: AnimatedSlide(
+    final bool showHud = _showScorePanel && !_showKingdomScoreOverlay;
+    return AnimatedSlide(
+      duration: const Duration(milliseconds: 520),
+      offset: showHud ? Offset.zero : const Offset(0, -0.22),
+      curve: Curves.easeOutCubic,
+      child: AnimatedOpacity(
         duration: const Duration(milliseconds: 520),
-        offset: _showScorePanel ? Offset.zero : const Offset(0, -0.22),
+        opacity: showHud ? 1 : 0,
         curve: Curves.easeOutCubic,
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 520),
-          opacity: _showScorePanel ? 1 : 0,
-          curve: Curves.easeOutCubic,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, _scoreHudTopInset, 12, 0),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  for (int i = 0; i < panels.length; i++) ...<Widget>[
-                    Expanded(child: _HudScorePanelCard(model: panels[i])),
-                    if (i != panels.length - 1) const SizedBox(width: 8),
-                  ],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, _scoreHudTopInset, 12, 0),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                for (int i = 0; i < panels.length; i++) ...<Widget>[
+                  Expanded(
+                    child: i == 0
+                        ? GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _openKingdomScoreOverlay,
+                            child: _HudScorePanelCard(model: panels[i]),
+                          )
+                        : IgnorePointer(
+                            child: _HudScorePanelCard(model: panels[i]),
+                          ),
+                  ),
+                  if (i != panels.length - 1) const SizedBox(width: 8),
                 ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKingdomScoreOverlay() {
+    if (!_showKingdomScoreOverlay) {
+      return const SizedBox.shrink();
+    }
+    final Size screenSize = MediaQuery.sizeOf(context);
+    final SoldierDesignPalette themeFaction = _sortedFactionsByScores(
+      _boardAggregateScores.countryCellCounts,
+    ).first;
+    final _HudPanelIconData icon = _HudPanelIconData(
+      assetPath: _joystickKnobAssetPath(themeFaction),
+      imageScale: _joystickKnobImageScale(themeFaction),
+      imageOffset: _joystickKnobImageOffset(themeFaction),
+    );
+    return Positioned(
+      left: -screenSize.width * 2,
+      top: -screenSize.height * 2,
+      width: screenSize.width * 5,
+      height: screenSize.height * 5,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _closeKingdomScoreOverlay,
+        child: ColoredBox(
+          color: Colors.black.withValues(alpha: 0.55),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {},
+                  child: _HudKingdomOverlayCard(
+                    title: 'Kingdom Score Popup window',
+                    themeFaction: themeFaction,
+                    panelIcon: icon,
+                    selectedView: _kingdomHistoryView,
+                    onViewChanged: (_KingdomHistoryView view) {
+                      setState(() {
+                        _kingdomHistoryView = view;
+                      });
+                    },
+                    selectedMetric: _kingdomMetricChartType,
+                    onMetricChanged: (_KingdomMetricChartType metric) {
+                      setState(() {
+                        _kingdomMetricChartType = metric;
+                      });
+                    },
+                    caption: _kingdomHistoryCaption(),
+                    historyPoints: _selectedKingdomHistoryPoints(),
+                    isLoading: _kingdomHistoryLoading,
+                    errorText: _kingdomHistoryError,
+                    chartTitle: _kingdomMetricChartTitle(),
+                    chartValueOf: _kingdomMetricValueGetter(),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1150,6 +1349,7 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
           _boardOffset = clampedOffset;
 
           final Widget sceneStack = Stack(
+            clipBehavior: Clip.none,
             children: <Widget>[
               Positioned(
                 left: 0,
@@ -1365,34 +1565,46 @@ class _Pseudo3DSceneState extends State<Pseudo3DScene>
                   ),
                 ),
               ),
-              Positioned(left: 0, right: 0, top: 0, child: _buildScoreHud()),
             ],
           );
 
-          return Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: (PointerDownEvent event) {
-              if (!_keyboardFocusNode.hasFocus) {
-                _keyboardFocusNode.requestFocus();
-              }
-              _onPointerDown(event);
-            },
-            onPointerMove: _onPointerMove,
-            onPointerUp: (_) => _onPointerEnd(),
-            onPointerCancel: (_) => _onPointerEnd(),
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: () {
-                if (!_keyboardFocusNode.hasFocus) {
-                  _keyboardFocusNode.requestFocus();
-                }
-              },
-              onScaleStart: _onScaleStart,
-              onScaleUpdate: (ScaleUpdateDetails details) =>
-                  _onScaleUpdate(details, size),
-              onScaleEnd: _onScaleEnd,
-              child: sceneStack,
-            ),
+          return Stack(
+            clipBehavior: Clip.none,
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(
+                child: Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: (PointerDownEvent event) {
+                    if (!_keyboardFocusNode.hasFocus) {
+                      _keyboardFocusNode.requestFocus();
+                    }
+                    _onPointerDown(event);
+                  },
+                  onPointerMove: _onPointerMove,
+                  onPointerUp: (_) => _onPointerEnd(),
+                  onPointerCancel: (_) => _onPointerEnd(),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () {
+                      if (_showKingdomScoreOverlay) {
+                        return;
+                      }
+                      if (!_keyboardFocusNode.hasFocus) {
+                        _keyboardFocusNode.requestFocus();
+                      }
+                    },
+                    onScaleStart: _onScaleStart,
+                    onScaleUpdate: (ScaleUpdateDetails details) =>
+                        _onScaleUpdate(details, size),
+                    onScaleEnd: _onScaleEnd,
+                    child: sceneStack,
+                  ),
+                ),
+              ),
+              Positioned(left: 0, right: 0, top: 0, child: _buildScoreHud()),
+              _buildKingdomScoreOverlay(),
+            ],
           );
         },
       ),
@@ -2789,7 +3001,7 @@ class _StrategicBoardScoring {
               in SoldierDesignPalette.values)
             faction: 0,
         };
-    final Map<SoldierDesignPalette, int> totalTributeByFaction =
+    final Map<SoldierDesignPalette, int> tributeRevenueByFaction =
         <SoldierDesignPalette, int>{
           for (final SoldierDesignPalette faction
               in SoldierDesignPalette.values)
@@ -2817,11 +3029,11 @@ class _StrategicBoardScoring {
       );
 
       landPowerByFaction[faction] = (landPowerByFaction[faction] ?? 0) + level;
-      for (final SoldierDesignPalette tributeFaction
+      for (final SoldierDesignPalette revenueFaction
           in SoldierDesignPalette.values) {
-        totalTributeByFaction[tributeFaction] =
-            (totalTributeByFaction[tributeFaction] ?? 0) +
-            (cellScores[tributeFaction] ?? 0);
+        tributeRevenueByFaction[revenueFaction] =
+            (tributeRevenueByFaction[revenueFaction] ?? 0) +
+            (cellScores[revenueFaction] ?? 0);
       }
 
       if (faction != playerFaction) {
@@ -2869,7 +3081,7 @@ class _StrategicBoardScoring {
     return _BoardAggregateScores(
       countryCellCounts: countryCellCounts,
       landPowerByFaction: landPowerByFaction,
-      totalTributeByFaction: totalTributeByFaction,
+      tributeRevenueByFaction: tributeRevenueByFaction,
       enemyKillsByFaction: enemyKillsByFaction,
       moneyCollected: moneyCollected,
       personalLevel: level,
@@ -2925,7 +3137,7 @@ class _BoardAggregateScores {
   const _BoardAggregateScores({
     required this.countryCellCounts,
     required this.landPowerByFaction,
-    required this.totalTributeByFaction,
+    required this.tributeRevenueByFaction,
     required this.enemyKillsByFaction,
     required this.moneyCollected,
     required this.personalLevel,
@@ -2937,7 +3149,7 @@ class _BoardAggregateScores {
 
   final Map<SoldierDesignPalette, int> countryCellCounts;
   final Map<SoldierDesignPalette, int> landPowerByFaction;
-  final Map<SoldierDesignPalette, int> totalTributeByFaction;
+  final Map<SoldierDesignPalette, int> tributeRevenueByFaction;
   final Map<SoldierDesignPalette, int> enemyKillsByFaction;
   final int moneyCollected;
   final int personalLevel;
@@ -2960,6 +3172,7 @@ class _HudScorePanelModel {
     this.panelIcon,
     this.session,
     this.kingdomSections,
+    this.isKingdomSummaryButton = false,
   });
 
   final _HudPanelKind kind;
@@ -2971,6 +3184,7 @@ class _HudScorePanelModel {
   final _HudPanelIconData? panelIcon;
   final GameSessionState? session;
   final List<_HudKingdomMetricSection>? kingdomSections;
+  final bool isKingdomSummaryButton;
 }
 
 class _HudPanelIconData {
@@ -3041,23 +3255,8 @@ class _HudScorePanelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<Color> theme = factionTierList(model.themeFaction);
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          theme[0].withValues(alpha: 0.12),
-          const Color(0xE20B1020),
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme[2].withValues(alpha: 0.62), width: 1.1),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: theme[1].withValues(alpha: 0.18),
-            blurRadius: 12,
-            spreadRadius: 0.5,
-          ),
-        ],
-      ),
+      decoration: _hudPanelDecoration(model.themeFaction),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(6, 5, 6, 6),
         child: switch (model.kind) {
@@ -3069,6 +3268,28 @@ class _HudScorePanelCard extends StatelessWidget {
       ),
     );
   }
+}
+
+BoxDecoration _hudPanelDecoration(
+  SoldierDesignPalette themeFaction, {
+  double borderRadius = 14,
+}) {
+  final List<Color> theme = factionTierList(themeFaction);
+  return BoxDecoration(
+    color: Color.alphaBlend(
+      theme[0].withValues(alpha: 0.12),
+      const Color(0xE20B1020),
+    ),
+    borderRadius: BorderRadius.circular(borderRadius),
+    border: Border.all(color: theme[2].withValues(alpha: 0.62), width: 1.1),
+    boxShadow: <BoxShadow>[
+      BoxShadow(
+        color: theme[1].withValues(alpha: 0.18),
+        blurRadius: 12,
+        spreadRadius: 0.5,
+      ),
+    ],
+  );
 }
 
 class _HudKingdomPanelBody extends StatelessWidget {
@@ -3123,7 +3344,10 @@ class _HudKingdomPanelBody extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   for (int i = 0; i < sections.length; i++) ...<Widget>[
-                    _HudKingdomMetricSectionView(section: sections[i]),
+                    _HudKingdomMetricSectionView(
+                      section: sections[i],
+                      dense: true,
+                    ),
                     if (i != sections.length - 1) const SizedBox(height: 5),
                   ],
                 ],
@@ -3177,9 +3401,13 @@ class _HudLandPanelBody extends StatelessWidget {
 }
 
 class _HudKingdomMetricSectionView extends StatelessWidget {
-  const _HudKingdomMetricSectionView({required this.section});
+  const _HudKingdomMetricSectionView({
+    required this.section,
+    this.dense = true,
+  });
 
   final _HudKingdomMetricSection section;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -3188,13 +3416,13 @@ class _HudKingdomMetricSectionView extends StatelessWidget {
       children: <Widget>[
         Text(
           section.label,
-          style: const TextStyle(
+          style: TextStyle(
             color: Color(0xCCF7FBFF),
-            fontSize: 8.1,
+            fontSize: dense ? 8.1 : 11.5,
             fontWeight: FontWeight.w800,
           ),
         ),
-        const SizedBox(height: 2),
+        SizedBox(height: dense ? 2 : 5),
         Row(
           children: SoldierDesignPalette.values
               .map(
@@ -3202,6 +3430,7 @@ class _HudKingdomMetricSectionView extends StatelessWidget {
                   child: _HudFactionDotValue(
                     faction: faction,
                     value: section.values[faction] ?? 0,
+                    dense: dense,
                   ),
                 ),
               )
@@ -3422,10 +3651,15 @@ class _HudFactionScoreRow extends StatelessWidget {
 }
 
 class _HudFactionDotValue extends StatelessWidget {
-  const _HudFactionDotValue({required this.faction, required this.value});
+  const _HudFactionDotValue({
+    required this.faction,
+    required this.value,
+    this.dense = true,
+  });
 
   final SoldierDesignPalette faction;
   final int value;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -3434,8 +3668,8 @@ class _HudFactionDotValue extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Container(
-          width: 5,
-          height: 5,
+          width: dense ? 5 : 7,
+          height: dense ? 5 : 7,
           decoration: BoxDecoration(
             color: chipColor,
             shape: BoxShape.circle,
@@ -3450,11 +3684,631 @@ class _HudFactionDotValue extends StatelessWidget {
         ),
         const SizedBox(width: 3),
         Flexible(
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: dense ? 3 : 5,
+            runSpacing: 2,
+            children: <Widget>[
+              Text(
+                _formatCompactInt(value),
+                style: TextStyle(
+                  color: chipColor.withValues(alpha: 0.98),
+                  fontSize: dense ? 8.5 : 11.8,
+                  fontWeight: FontWeight.w900,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HudKingdomOverlayCard extends StatelessWidget {
+  const _HudKingdomOverlayCard({
+    required this.title,
+    required this.themeFaction,
+    required this.panelIcon,
+    required this.selectedView,
+    required this.onViewChanged,
+    required this.selectedMetric,
+    required this.onMetricChanged,
+    required this.caption,
+    required this.historyPoints,
+    required this.isLoading,
+    required this.errorText,
+    required this.chartTitle,
+    required this.chartValueOf,
+  });
+
+  final String title;
+  final SoldierDesignPalette themeFaction;
+  final _HudPanelIconData panelIcon;
+  final _KingdomHistoryView selectedView;
+  final ValueChanged<_KingdomHistoryView> onViewChanged;
+  final _KingdomMetricChartType selectedMetric;
+  final ValueChanged<_KingdomMetricChartType> onMetricChanged;
+  final String caption;
+  final List<KingdomScoreHistoryPoint> historyPoints;
+  final bool isLoading;
+  final String? errorText;
+  final (String, String) chartTitle;
+  final _KingdomMetricValueGetter chartValueOf;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Color> theme = factionTierList(themeFaction);
+    return DecoratedBox(
+      decoration: _hudPanelDecoration(themeFaction, borderRadius: 20),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 460),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            title,
+                            style: TextStyle(
+                              color: theme[2].withValues(alpha: 0.98),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: _HudFactionAvatar(
+                        assetPath: panelIcon.assetPath,
+                        imageScale: panelIcon.imageScale,
+                        imageOffset: panelIcon.imageOffset,
+                        theme: theme,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: <Widget>[
+                    _KingdomHistoryViewChip(
+                      label: 'Daily',
+                      selected: selectedView == _KingdomHistoryView.daily,
+                      onTap: () => onViewChanged(_KingdomHistoryView.daily),
+                      themeFaction: themeFaction,
+                    ),
+                    const SizedBox(width: 8),
+                    _KingdomHistoryViewChip(
+                      label: 'Month',
+                      selected: selectedView == _KingdomHistoryView.monthly,
+                      onTap: () => onViewChanged(_KingdomHistoryView.monthly),
+                      themeFaction: themeFaction,
+                    ),
+                    const Spacer(),
+                    Text(
+                      caption,
+                      style: const TextStyle(
+                        color: Color(0xFFD5DFEE),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _KingdomMetricSelectorChip(
+                      label: 'Territory Size',
+                      selected:
+                          selectedMetric ==
+                          _KingdomMetricChartType.territorySize,
+                      onTap: () => onMetricChanged(
+                        _KingdomMetricChartType.territorySize,
+                      ),
+                      themeFaction: themeFaction,
+                    ),
+                    _KingdomMetricSelectorChip(
+                      label: 'Land Power',
+                      selected:
+                          selectedMetric == _KingdomMetricChartType.landPower,
+                      onTap: () =>
+                          onMetricChanged(_KingdomMetricChartType.landPower),
+                      themeFaction: themeFaction,
+                    ),
+                    _KingdomMetricSelectorChip(
+                      label: 'Tribute Revenue',
+                      selected:
+                          selectedMetric ==
+                          _KingdomMetricChartType.tributeRevenue,
+                      onTap: () => onMetricChanged(
+                        _KingdomMetricChartType.tributeRevenue,
+                      ),
+                      themeFaction: themeFaction,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (isLoading)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 36),
+                      child: CircularProgressIndicator(strokeWidth: 2.6),
+                    ),
+                  )
+                else if (errorText != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Text(
+                      errorText!,
+                      style: const TextStyle(
+                        color: Color(0xFFFFB4B4),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                else if (historyPoints.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Text(
+                      'No history data available.',
+                      style: TextStyle(
+                        color: Color(0xFFD5DFEE),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                else
+                  _KingdomMetricChartCard(
+                    chartTitle: chartTitle,
+                    historyPoints: historyPoints,
+                    selectedView: selectedView,
+                    valueOf: chartValueOf,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KingdomMetricSelectorChip extends StatelessWidget {
+  const _KingdomMetricSelectorChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.themeFaction,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final SoldierDesignPalette themeFaction;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Color> theme = factionTierList(themeFaction);
+    return GestureDetector(
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected
+              ? theme[1].withValues(alpha: 0.18)
+              : const Color(0x22000000),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? theme[2].withValues(alpha: 0.8)
+                : const Color(0x33FFFFFF),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? theme[2] : const Color(0xFFD5DFEE),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+typedef _KingdomMetricValueGetter =
+    int Function(KingdomScoreHistoryPoint point, SoldierDesignPalette faction);
+
+class _KingdomHistoryViewChip extends StatelessWidget {
+  const _KingdomHistoryViewChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.themeFaction,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final SoldierDesignPalette themeFaction;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Color> theme = factionTierList(themeFaction);
+    return GestureDetector(
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected
+              ? theme[2].withValues(alpha: 0.22)
+              : const Color(0x22000000),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? theme[2].withValues(alpha: 0.85)
+                : const Color(0x44FFFFFF),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? theme[2] : const Color(0xFFD5DFEE),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KingdomMetricChartCard extends StatefulWidget {
+  const _KingdomMetricChartCard({
+    required this.chartTitle,
+    required this.historyPoints,
+    required this.selectedView,
+    required this.valueOf,
+  });
+
+  final (String, String) chartTitle;
+  final List<KingdomScoreHistoryPoint> historyPoints;
+  final _KingdomHistoryView selectedView;
+  final _KingdomMetricValueGetter valueOf;
+
+  @override
+  State<_KingdomMetricChartCard> createState() => _KingdomMetricChartCardState();
+}
+
+class _KingdomMetricChartCardState extends State<_KingdomMetricChartCard> {
+  int? _touchedIndex;
+
+  void _updateTouch(double dx, double maxWidth) {
+    if (widget.historyPoints.isEmpty || maxWidth <= 0) {
+      return;
+    }
+    int index = ((dx / maxWidth) * (widget.historyPoints.length - 1)).round();
+    index = index.clamp(0, widget.historyPoints.length - 1);
+    if (_touchedIndex != index) {
+      setState(() {
+        _touchedIndex = index;
+      });
+    }
+  }
+
+  void _clearTouch() {
+    if (_touchedIndex != null) {
+      setState(() {
+        _touchedIndex = null;
+      });
+    }
+  }
+
+  String _formatWithCommas(int value) {
+    final String str = value.toString();
+    String result = '';
+    for (int i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) {
+        result += ',';
+      }
+      result += str[i];
+    }
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<SoldierDesignPalette, List<int>>
+    series = <SoldierDesignPalette, List<int>>{
+      for (final SoldierDesignPalette faction in SoldierDesignPalette.values)
+        faction: widget.historyPoints
+            .map((KingdomScoreHistoryPoint point) => widget.valueOf(point, faction))
+            .toList(),
+    };
+    final KingdomScoreHistoryPoint firstPoint = widget.historyPoints.first;
+    final KingdomScoreHistoryPoint lastPoint = widget.historyPoints.last;
+    
+    final List<int> allValues = series.values.expand((l) => l).toList();
+    int minValue = allValues.reduce(math.min);
+    int maxValue = allValues.reduce(math.max);
+    if (minValue == maxValue) {
+      minValue -= 1;
+      maxValue += 1;
+    }
+    final double valueRange = (maxValue - minValue).toDouble();
+    final double paddingY = valueRange * 0.1;
+    final double minY = math.max(0, minValue - paddingY);
+    final double maxY = maxValue + paddingY;
+
+    final List<LineChartBarData> lineBarsData = <LineChartBarData>[
+      for (final SoldierDesignPalette faction in SoldierDesignPalette.values)
+        if (series[faction]!.isNotEmpty)
+          LineChartBarData(
+            showingIndicators: _touchedIndex == null ? <int>[] : <int>[_touchedIndex!],
+            spots: <FlSpot>[
+              for (int index = 0; index < series[faction]!.length; index++)
+                FlSpot(index.toDouble(), series[faction]![index].toDouble())
+            ],
+            isCurved: false,
+            color: factionTierColor(faction, 2),
+            barWidth: 2.1,
+            isStrokeCapRound: true,
+            dotData: FlDotData(
+              show: true,
+              checkToShowDot: (spot, barData) => spot.x == series[faction]!.length - 1,
+              getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                radius: 3.2,
+                color: barData.color ?? Colors.white,
+                strokeWidth: 2,
+                strokeColor: (barData.color ?? Colors.white).withValues(alpha: 0.22),
+              ),
+            ),
+          )
+    ];
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0x20000000),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0x30FFFFFF)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            return Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: (PointerDownEvent event) => _updateTouch(event.localPosition.dx, constraints.maxWidth),
+              onPointerMove: (PointerMoveEvent event) => _updateTouch(event.localPosition.dx, constraints.maxWidth),
+              onPointerUp: (_) => _clearTouch(),
+              onPointerCancel: (_) => _clearTouch(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  widget.chartTitle.$1,
+                  style: const TextStyle(
+                    color: Color(0xFFF7FBFF),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  widget.chartTitle.$2,
+                  style: const TextStyle(
+                    color: Color(0xFFD5DFEE),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Row(
+              children: SoldierDesignPalette.values
+                  .map(
+                    (SoldierDesignPalette faction) => Expanded(
+                      child: _KingdomChartLegendValue(
+                        faction: faction,
+                        value: series[faction]!.last,
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 124,
+              child: LineChart(
+                LineChartData(
+                  minY: minY,
+                  maxY: maxY,
+                  minX: 0,
+                  maxX: math.max(1, (widget.historyPoints.length - 1).toDouble()),
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (value) => const FlLine(
+                      color: Color(0x22FFFFFF),
+                      strokeWidth: 1,
+                    ),
+                  ),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 32,
+                        interval: math.max(1, (widget.historyPoints.length / 8).floorToDouble()),
+                        getTitlesWidget: (double value, TitleMeta meta) {
+                          if (value.toInt() < 0 || value.toInt() >= widget.historyPoints.length) {
+                            return const SizedBox.shrink();
+                          }
+                          final KingdomScoreHistoryPoint point = widget.historyPoints[value.toInt()];
+                          return SideTitleWidget(
+                            meta: meta,
+                            space: 6,
+                            child: Transform.rotate(
+                              angle: -math.pi * 60 / 180,
+                              child: Text(
+                                point.periodId,
+                                style: const TextStyle(
+                                  color: Color(0xFFD5DFEE),
+                                  fontSize: 7.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  showingTooltipIndicators: _touchedIndex == null
+                      ? <ShowingTooltipIndicators>[]
+                      : <ShowingTooltipIndicators>[
+                          ShowingTooltipIndicators(<LineBarSpot>[
+                            for (int i = 0; i < lineBarsData.length; i++)
+                              LineBarSpot(lineBarsData[i], i, lineBarsData[i].spots[_touchedIndex!]),
+                          ])
+                        ],
+                  extraLinesData: ExtraLinesData(
+                    verticalLines: _touchedIndex == null
+                        ? <VerticalLine>[]
+                        : <VerticalLine>[
+                            VerticalLine(
+                              x: _touchedIndex!.toDouble(),
+                              color: Colors.white,
+                              strokeWidth: 1,
+                              dashArray: <int>[4, 4],
+                            ),
+                          ],
+                  ),
+                  lineTouchData: LineTouchData(
+                    handleBuiltInTouches: false,
+                    getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
+                      return spotIndexes.map((int index) {
+                        return TouchedSpotIndicatorData(
+                          const FlLine(color: Colors.transparent),
+                          FlDotData(
+                            show: true,
+                            getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                              radius: 4,
+                              color: barData.color ?? Colors.white,
+                              strokeWidth: 2,
+                              strokeColor: Colors.black,
+                            ),
+                          ),
+                        );
+                      }).toList();
+                    },
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipColor: (LineBarSpot touchedSpot) => Colors.black87,
+                      getTooltipItems: (List<LineBarSpot> touchedSpots) {
+                        return touchedSpots.map((LineBarSpot touchedSpot) {
+                          final TextStyle textStyle = TextStyle(
+                            color: touchedSpot.bar.color,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          );
+                          final String formattedValue = _formatWithCommas(touchedSpot.y.round());
+                          if (touchedSpot == touchedSpots.first) {
+                            final String date = widget.historyPoints[touchedSpot.spotIndex].periodId;
+                            return LineTooltipItem(
+                              '$date\n',
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                              children: <TextSpan>[
+                                TextSpan(
+                                  text: formattedValue,
+                                  style: textStyle,
+                                ),
+                              ],
+                            );
+                          }
+                          return LineTooltipItem(
+                            formattedValue,
+                            textStyle,
+                          );
+                        }).toList();
+                      },
+                    ),
+                    touchCallback: null,
+                  ),
+                  lineBarsData: lineBarsData,
+                ),
+              ),
+            ),
+          ],
+        ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _KingdomChartLegendValue extends StatelessWidget {
+  const _KingdomChartLegendValue({required this.faction, required this.value});
+
+  final SoldierDesignPalette faction;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = factionTierColor(faction, 2);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Flexible(
           child: Text(
             _formatCompactInt(value),
             style: TextStyle(
-              color: chipColor.withValues(alpha: 0.98),
-              fontSize: 8.5,
+              color: color.withValues(alpha: 0.98),
+              fontSize: 10.5,
               fontWeight: FontWeight.w900,
             ),
             overflow: TextOverflow.ellipsis,
@@ -3463,6 +4317,17 @@ class _HudFactionDotValue extends StatelessWidget {
       ],
     );
   }
+}
+
+String _historyAxisLabel(String periodId, _KingdomHistoryView view) {
+  final List<String> parts = periodId.split('-');
+  if (view == _KingdomHistoryView.daily && parts.length == 3) {
+    return '${parts[1]}/${parts[2]}';
+  }
+  if (view == _KingdomHistoryView.monthly && parts.length >= 2) {
+    return '${parts[0].substring(2)}/${parts[1]}';
+  }
+  return periodId;
 }
 
 class _HudFactionAvatar extends StatelessWidget {
@@ -3617,8 +4482,14 @@ class _HudKingdomMinimapPainter extends CustomPainter {
     final double maxY = _Pseudo3DBoardPainter.landExtentY;
     final double width = maxX - minX;
     final double height = maxY - minY;
-    final double usableW = size.width - 8;
-    final double usableH = size.height - 8;
+    const double inset = 4;
+    final double usableW = math.max(0, size.width - inset * 2);
+    final double usableH = math.max(0, size.height - inset * 2);
+    final double scale = math.min(usableW / width, usableH / height);
+    final double contentWidth = width * scale;
+    final double contentHeight = height * scale;
+    final double offsetX = (size.width - contentWidth) / 2;
+    final double offsetY = (size.height - contentHeight) / 2;
 
     for (final Offset localCenter
         in _Pseudo3DBoardPainter._baseLandTileCenters) {
@@ -3632,9 +4503,9 @@ class _HudKingdomMinimapPainter extends CustomPainter {
         2 => 3,
         _ => 4,
       };
-      final double nx = (localCenter.dx - minX) / width;
-      final double ny = (localCenter.dy - minY) / height;
-      final Offset p = Offset(4 + nx * usableW, 4 + (1 - ny) * usableH);
+      final double px = offsetX + (localCenter.dx - minX) * scale;
+      final double py = offsetY + (maxY - localCenter.dy) * scale;
+      final Offset p = Offset(px, py);
       canvas.drawCircle(
         p,
         1.25,
